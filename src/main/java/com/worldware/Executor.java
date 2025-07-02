@@ -157,6 +157,7 @@ public class Executor {
             case "DATA" -> executeData(stmt);
             case "RESTORE" -> executeRestore(stmt);
             case "DEF" -> executeDef(stmt);
+            case "ON" -> executeOn(stmt);
             default -> throw new BasicSyntaxError("Unknown statement: " + keyword);
         }
     }
@@ -191,6 +192,15 @@ public class Executor {
         AssignmentStatement assignment = (AssignmentStatement) stmt;
         String valueExpr = assignment.getExpression();
         Object value = evaluateExpression(valueExpr);
+        
+        // Normalize numeric value: if the expression was a plain numeric literal (no letters or parentheses)
+        // and the resulting value is an integral Double, store it as Integer so that symbols keep expected type.
+        if (value instanceof Double d && d == Math.rint(d)) {
+            boolean plainNumber = valueExpr.matches("\\s*[-+]?[0-9]+\\s*");
+            if (plainNumber) {
+                value = (int) d.doubleValue();
+            }
+        }
         
         if (assignment.isArrayAssignment()) {
             // Array assignment like A(1) = 5
@@ -318,7 +328,7 @@ public class Executor {
         gotoLocation = gosubStack.pop();
     }
 
-    private void executeFor(Statement stmt) throws BasicSyntaxError {
+    private void executeFor(Statement stmt) throws BasicSyntaxError, BasicRuntimeError {
         if (!(stmt instanceof ForStatement)) {
             throw new BasicSyntaxError("Invalid FOR statement");
         }
@@ -333,6 +343,22 @@ public class Executor {
         Object startValue = evaluateExpression(startExpr);
         Object endValue = evaluateExpression(endExpr);
         Object stepValue = evaluateExpression(stepExpr);
+        
+        if (!(stepValue instanceof Number) || ((Number)stepValue).doubleValue() == 0.0) {
+            throw new BasicRuntimeError("STEP value cannot be 0");
+        }
+
+        double stepNum = ((Number)stepValue).doubleValue();
+        double startNum = ((Number)startValue).doubleValue();
+        double endNum = ((Number)endValue).doubleValue();
+
+        // Determine if loop should execute at all
+        boolean willRun = stepNum > 0 ? startNum <= endNum : startNum >= endNum;
+        if (!willRun) {
+            // Do not push FOR record; loop body will be skipped
+            symbols.put(var.toUpperCase(), startValue);
+            return;
+        }
         
         // Set loop variable to start value
         symbols.put(var.toUpperCase(), startValue);
@@ -596,6 +622,57 @@ public class Executor {
         DefStatement defStmt = (DefStatement) stmt;
         System.out.println("DEBUG: Registering user function: " + defStmt.getFunctionName() + " = " + defStmt.getExpression());
         userFunctions.put(defStmt.getFunctionName(), defStmt);
+    }
+
+    /**
+     * Execute an ON GOTO / ON GOSUB computed jump
+     * Syntax:  ON <expr> GOTO line1,line2,...   or   ON <expr> GOSUB line1,line2,...
+     */
+    private void executeOn(Statement stmt) throws BasicSyntaxError {
+        String upper = stmt.getArgs().toUpperCase();
+        boolean gosub = upper.contains("GOSUB");
+        String keyword = gosub ? "GOSUB" : "GOTO";
+
+        int kwIndex = upper.indexOf(keyword);
+        if (kwIndex == -1) {
+            throw new BasicSyntaxError("ON statement missing " + keyword);
+        }
+
+        String exprPart = stmt.getArgs().substring(0, kwIndex).trim();
+        String listPart = stmt.getArgs().substring(kwIndex + keyword.length()).trim();
+
+        Object exprVal = evaluateExpression(exprPart);
+        if (!(exprVal instanceof Number)) {
+            return; // Non-numeric expression – fall through (no jump)
+        }
+        int index = ((Number) exprVal).intValue(); // BASIC is 1-based
+        if (index < 1) {
+            return; // Out of range – continue execution
+        }
+
+        String[] dests = listPart.split(",");
+        if (index > dests.length) {
+            return; // Out of range – continue
+        }
+
+        String destStr = dests[index - 1].trim();
+        if (destStr.isEmpty()) {
+            return;
+        }
+        try {
+            int lineNumber = Integer.parseInt(destStr);
+            int lineIndex = program.findLineIndex(lineNumber);
+            if (gosub) {
+                // Save return location
+                ControlLocation nextLocation = getNextStatement();
+                if (nextLocation != null) {
+                    gosubStack.push(nextLocation);
+                }
+            }
+            gotoLocation = new ControlLocation(lineIndex, 0);
+        } catch (NumberFormatException e) {
+            throw new BasicSyntaxError("Invalid line number in ON statement: " + destStr);
+        }
     }
 
     /**
