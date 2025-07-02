@@ -60,15 +60,27 @@ tasks.register("runTestSuite") {
             return@doLast
         }
         basFiles.forEach { prog ->
-            println("\n>>> Running ${'$'}{prog.relativeTo(projectDir)}")
+            println("\n>>> Running ${prog.relativeTo(projectDir)}")
+
+            // Check for "REM EXPECT_EXIT_CODE=N" directive (default 0)
+            var expectedCode = 0
+            prog.useLines { lines ->
+                lines.take(5).forEach { line ->
+                    val m = Regex(".*REM\\s+EXPECT_EXIT_CODE\\s*=\\s*(\\d+)", RegexOption.IGNORE_CASE).find(line)
+                    if (m != null) {
+                        expectedCode = m.groupValues[1].toInt()
+                        return@useLines
+                    }
+                }
+            }
+
             val result = javaexec {
                 mainClass.set("com.worldware.Main")
                 classpath = sourceSets["main"].runtimeClasspath
                 args = listOf(prog.absolutePath)
-                // show interpreter output
             }
-            if (result.exitValue != 0) {
-                failures.add(prog.name)
+            if (result.exitValue != expectedCode) {
+                failures.add("${prog.name} (expected $expectedCode got ${result.exitValue})")
             }
         }
         if (failures.isNotEmpty()) {
