@@ -355,9 +355,20 @@ public class Executor {
         // Determine if loop should execute at all
         boolean willRun = stepNum > 0 ? startNum <= endNum : startNum >= endNum;
         if (!willRun) {
-            // Do not push FOR record; loop body will be skipped
-            symbols.put(var.toUpperCase(), startValue);
-            return;
+            // Skip directly to the matching NEXT <var>
+            ControlLocation search = location;
+            while (true) {
+                ControlLocation next = getNextStatementFrom(search);
+                if (next == null) {
+                    throw new BasicSyntaxError("FOR without matching NEXT");
+                }
+                Statement s = program.getLine(next.getIndex()).getStmts().get(next.getOffset());
+                if ("NEXT".equals(s.getKeyword()) && s.getArgs().trim().equalsIgnoreCase(var)) {
+                    gotoLocation = getNextStatementFrom(next);
+                    return;
+                }
+                search = next;
+            }
         }
         
         // Set loop variable to start value
@@ -713,10 +724,11 @@ public class Executor {
     }
 
     public ControlLocation getNextStatement() {
-        if (atEnd()) {
-            return null;
-        }
-        return program.getNextStatementLocation(location.getIndex(), location.getOffset());
+        return getNextStatementFrom(location);
+    }
+
+    private ControlLocation getNextStatementFrom(ControlLocation loc) {
+        return program.getNextStatementLocation(loc.getIndex(), loc.getOffset());
     }
 
     public ControlLocation getNextLine() {
