@@ -41,6 +41,52 @@ public class BasicLoader {
     }
     
     /**
+     * Split a BASIC source line into statements separated by ':' taking into
+     * account that any ':' appearing after a THEN in an IF-statement belongs to
+     * that IF and must not start a new statement.
+     */
+    private static List<String> splitStatements(String text) {
+        List<String> parts = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        boolean inString = false;
+        boolean afterThen = false;
+
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+
+            if (c == '"') {
+                inString = !inString;
+                current.append(c);
+                continue;
+            }
+
+            if (!inString) {
+                // Detect the keyword THEN (word boundary, case-insensitive)
+                if (!afterThen && (c == 'T' || c == 't')) {
+                    String upperRest = text.substring(i).toUpperCase();
+                    if (upperRest.startsWith("THEN") && (i == 0 || Character.isWhitespace(text.charAt(i - 1)))) {
+                        afterThen = true;
+                    }
+                }
+
+                if (c == ':' && !afterThen) {
+                    parts.add(current.toString());
+                    current.setLength(0);
+                    continue; // Do not include ':'
+                }
+            }
+
+            current.append(c);
+        }
+
+        if (current.length() > 0) {
+            parts.add(current.toString());
+        }
+
+        return parts;
+    }
+    
+    /**
      * Tokenize a list of BASIC source lines into a Program
      */
     public static Program tokenize(List<String> lines) throws BasicSyntaxError {
@@ -107,9 +153,10 @@ public class BasicLoader {
         int lineNumber = Integer.parseInt(matcher.group(1));
         String rest = matcher.group(2).trim();
         
-        // Split by colons to handle multiple statements on one line
-        // But don't split colons inside string literals
-        List<String> statementParts = smartSplit(rest, ':');
+        // Split the line into separate statements using ':' as a separator, but
+        // honour the rule that everything after THEN on an IF-statement belongs
+        // to that IF (colons inside that region are *not* top-level separators).
+        List<String> statementParts = splitStatements(rest);
         List<Statement> statements = new ArrayList<>();
         
         for (String part : statementParts) {
@@ -227,10 +274,15 @@ public class BasicLoader {
             case "CLEAR" -> new BasicStatement(keyword, args);
             default -> {
                 // Check if it's an assignment (no keyword, just variable = expression)
-                if (statementText.contains("=") && !statementText.contains("==") && !statementText.contains("<=") && !statementText.contains(">=") && !statementText.contains("<>")) {
+                if (statementText.contains("=") && !statementText.contains("==") && !statementText.contains("<=") && !statementText.contains(">=")) {
                     yield new AssignmentStatement("LET", statementText);
                 } else {
-                    yield new BasicStatement(keyword, args);
+                    // Numeric-only statement treated as GOTO <number>
+                    if (statementText.matches("\\d+")) {
+                        yield new BasicStatement("GOTO", statementText);
+                    } else {
+                        yield new BasicStatement(keyword, args);
+                    }
                 }
             }
         };

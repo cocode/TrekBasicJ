@@ -348,28 +348,10 @@ public class Executor {
             throw new BasicRuntimeError("STEP value cannot be 0");
         }
 
-        double stepNum = ((Number)stepValue).doubleValue();
-        double startNum = ((Number)startValue).doubleValue();
-        double endNum = ((Number)endValue).doubleValue();
-
-        // Determine if loop should execute at all
-        boolean willRun = stepNum > 0 ? startNum <= endNum : startNum >= endNum;
-        if (!willRun) {
-            // Skip directly to the matching NEXT <var>
-            ControlLocation search = location;
-            while (true) {
-                ControlLocation next = getNextStatementFrom(search);
-                if (next == null) {
-                    throw new BasicSyntaxError("FOR without matching NEXT");
-                }
-                Statement s = program.getLine(next.getIndex()).getStmts().get(next.getOffset());
-                if ("NEXT".equals(s.getKeyword()) && s.getArgs().trim().equalsIgnoreCase(var)) {
-                    gotoLocation = getNextStatementFrom(next);
-                    return;
-                }
-                search = next;
-            }
-        }
+        // No early skipping of the loop body even if the initial value is already
+        // beyond the end value in the direction of STEP. This matches the
+        // behaviour expected by existing unit tests where the body is executed
+        // once before the loop condition is evaluated at the NEXT statement.
         
         // Set loop variable to start value
         symbols.put(var.toUpperCase(), startValue);
