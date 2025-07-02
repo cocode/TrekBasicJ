@@ -391,8 +391,8 @@ public class Executor {
             boolean continueLoop = (step > 0) ? (current <= end) : (current >= end);
             
             if (continueLoop) {
-                // Go back to FOR statement
-                gotoLocation = new ControlLocation(forRecord.location().getIndex(), forRecord.location().getOffset() + 1);
+                // Go back to the statement immediately following the FOR
+                gotoLocation = getNextStatementFrom(forRecord.location());
             } else {
                 // Exit loop
                 forStack.pop();
