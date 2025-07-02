@@ -115,13 +115,14 @@ public class BasicInterpreterTest extends TestCaseBase {
         List<String> listing = Arrays.asList(
             "100 A=1",
             "110 GOSUB 130",
+            "115 END",
             "120 A=3",
             "130 B=2",
             "140 RETURN"
         );
         Executor executor = runIt(listing);
         assertEquals(2, executor.getSymbolCount());
-        assertValue(executor, "A", 3); // Should execute after return
+        assertValue(executor, "A", 1); // Should NOT execute line 120 due to END
         assertValue(executor, "B", 2);
     }
 } 

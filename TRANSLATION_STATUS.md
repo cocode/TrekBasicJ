@@ -27,13 +27,23 @@ Successfully created a Java translation of the TrekBasic Python interpreter. The
 - [x] END and STOP statements
 - [x] CLEAR statement (clears all variables)
 - [x] REM comments
-- [x] IF statements (basic structure)
+- [x] IF/THEN statements with full condition evaluation
+- [x] IF/THEN/ELSE statements with full condition evaluation
+- [x] DIM arrays (single and multi-dimensional)
+- [x] INPUT statements with prompts and multiple variables
+- [x] READ/DATA/RESTORE statements with mixed data types
 
 ### Expression Evaluation
 - [x] String literals
 - [x] Numeric literals (integers and floats)
 - [x] Variable references
-- [x] Simple addition expressions (A+B)
+- [x] Arithmetic expressions (+, -, *, /, ^)
+- [x] Comparison operators (=, <>, <, >, <=, >=)
+- [x] Boolean operators (AND, OR)
+- [x] Parentheses handling
+- [x] Array access expressions
+- [x] Built-in function calls (INT, RND, SGN, ABS, SQR, SIN, COS, TAN, ATN, EXP, LOG)
+- [x] String functions (LEFT$, RIGHT$, MID$, LEN)
 - [x] Case-insensitive variable names
 
 ### Execution Engine
@@ -96,19 +106,10 @@ Program completed with a status of END_OF_PROGRAM
 - [x] Proper exit codes matching Python version
 
 ## Missing Features (To Be Implemented)
-- [ ] IF/THEN/ELSE condition evaluation
-- [ ] DIM arrays
-- [ ] DEF user-defined functions  
-- [ ] Built-in functions (INT, RND, SGN, EXP, etc.)
-- [ ] INPUT statements
-- [ ] READ/DATA/RESTORE statements
-- [ ] Complex expression evaluation (multiplication, division, parentheses)
-- [ ] String functions (LEFT$, RIGHT$, MID$, LEN, etc.)
+- [x] DEF user-defined functions  
 - [ ] Computed GOTO/GOSUB
 - [ ] ON GOTO/ON GOSUB
 - [ ] Advanced FOR loop features
-- [ ] Boolean operators (AND, OR, NOT)
-- [ ] Comparison operators (<, >, =, <>, <=, >=)
 
 ## Next Steps
 1. Run more comprehensive tests from the Python test suite

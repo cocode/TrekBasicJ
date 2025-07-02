@@ -18,6 +18,13 @@ public class Executor {
     private final Map<String, Object> symbols;
     private final Set<String> dataBreakpoints;
     private boolean modified;
+    
+    // Data management for READ/DATA/RESTORE
+    private final List<Object> dataValues;
+    private int dataPointer;
+    
+    // User-defined functions management
+    private final Map<String, DefStatement> userFunctions;
 
     public Executor(Program program) throws IOException {
         this(program, false);
@@ -35,13 +42,30 @@ public class Executor {
         this.symbols = new HashMap<>();
         this.dataBreakpoints = new HashSet<>();
         this.modified = false;
+        this.dataValues = new ArrayList<>();
+        this.dataPointer = 0;
+        this.userFunctions = new HashMap<>();
         
         setupProgram();
     }
 
     private void setupProgram() {
-        // Initialize any built-in symbols/functions here
-        // TODO: Add built-in functions like INT, RND, SGN, etc.
+        // Initialize built-in functions
+        symbols.put("INT", "BUILTIN_FUNCTION");
+        symbols.put("RND", "BUILTIN_FUNCTION");
+        symbols.put("SGN", "BUILTIN_FUNCTION");
+        symbols.put("EXP", "BUILTIN_FUNCTION");
+        symbols.put("LOG", "BUILTIN_FUNCTION");
+        symbols.put("SIN", "BUILTIN_FUNCTION");
+        symbols.put("COS", "BUILTIN_FUNCTION");
+        symbols.put("TAN", "BUILTIN_FUNCTION");
+        symbols.put("ATN", "BUILTIN_FUNCTION");
+        symbols.put("SQR", "BUILTIN_FUNCTION");
+        symbols.put("ABS", "BUILTIN_FUNCTION");
+        symbols.put("LEFT$", "BUILTIN_FUNCTION");
+        symbols.put("RIGHT$", "BUILTIN_FUNCTION");
+        symbols.put("MID$", "BUILTIN_FUNCTION");
+        symbols.put("LEN", "BUILTIN_FUNCTION");
     }
 
     /**
@@ -79,6 +103,11 @@ public class Executor {
             } catch (Exception e) {
                 runStatus = RunStatus.END_ERROR_INTERNAL;
                 throw new BasicInternalError("Internal error in line " + currentLine.getLine() + ": " + e.getMessage());
+            }
+
+            // Check if we should terminate due to END or STOP
+            if (runStatus == RunStatus.END_CMD || runStatus == RunStatus.END_STOP) {
+                return runStatus;
             }
 
             if (gotoLocation != null) {
@@ -122,26 +151,35 @@ public class Executor {
             case "THEN" -> { /* THEN is handled by IF */ }
             case "ELSE" -> { /* ELSE is handled by IF */ }
             case "CLEAR" -> executeClear(stmt);
+            case "DIM" -> executeDim(stmt);
+            case "INPUT" -> executeInput(stmt);
+            case "READ" -> executeRead(stmt);
+            case "DATA" -> executeData(stmt);
+            case "RESTORE" -> executeRestore(stmt);
+            case "DEF" -> executeDef(stmt);
             default -> throw new BasicSyntaxError("Unknown statement: " + keyword);
         }
     }
 
     private void executePrint(Statement stmt) {
-        // Simple PRINT implementation
+        // Improved PRINT: handle semicolon-separated expressions
         String args = stmt.getArgs();
         if (args.isEmpty()) {
             System.out.println(); // Empty line
         } else {
-            // TODO: Implement proper expression evaluation
-            // For now, just handle simple string literals
-            if (args.startsWith("\"") && args.endsWith("\"")) {
-                String text = args.substring(1, args.length() - 1);
-                System.out.println(text);
-            } else {
-                // Try to evaluate as variable or expression
-                Object value = evaluateExpression(args);
-                System.out.println(value);
+            String[] parts = args.split(";");
+            for (String part : parts) {
+                part = part.trim();
+                if (part.startsWith("\"") && part.endsWith("\"")) {
+                    // String literal
+                    System.out.print(part.substring(1, part.length() - 1));
+                } else if (!part.isEmpty()) {
+                    // Expression or variable
+                    Object value = evaluateExpression(part);
+                    System.out.print(value);
+                }
             }
+            System.out.println(); // End the line
         }
     }
 
@@ -151,21 +189,97 @@ public class Executor {
         }
         
         AssignmentStatement assignment = (AssignmentStatement) stmt;
-        String variable = assignment.getVariable();
-        String expression = assignment.getExpression();
+        String valueExpr = assignment.getExpression();
+        Object value = evaluateExpression(valueExpr);
         
-        Object value = evaluateExpression(expression);
-        symbols.put(variable.toUpperCase(), value);
+        if (assignment.isArrayAssignment()) {
+            // Array assignment like A(1) = 5
+            executeArrayAssignment(assignment, value);
+        } else {
+            // Simple variable assignment
+            String variable = assignment.getVariable().toUpperCase();
+            symbols.put(variable, value);
+        }
+    }
+    
+    private void executeArrayAssignment(AssignmentStatement assignment, Object value) throws BasicSyntaxError {
+        String arrayName = assignment.getArrayName();
+        String indices = assignment.getArrayIndices();
+        
+        // Look up the array
+        String arrayKey = "ARRAY:" + arrayName;
+        if (!symbols.containsKey(arrayKey)) {
+            throw new BasicSyntaxError("Array not defined: " + arrayName);
+        }
+        
+        Object array = symbols.get(arrayKey);
+        
+        // Parse indices
+        String[] indexStrs = indices.split(",");
+        
+        try {
+            // Navigate to the parent of the target element
+            Object current = array;
+            for (int i = 0; i < indexStrs.length - 1; i++) {
+                int index = (int) toNumber(evaluateExpression(indexStrs[i].trim()));
+                
+                if (current instanceof Object[]) {
+                    Object[] arr = (Object[]) current;
+                    if (index >= 0 && index < arr.length) {
+                        current = arr[index];
+                    } else {
+                        throw new BasicSyntaxError("Array index out of bounds: " + index);
+                    }
+                } else {
+                    throw new BasicSyntaxError("Too many array dimensions");
+                }
+            }
+            
+            // Set the final element
+            int finalIndex = (int) toNumber(evaluateExpression(indexStrs[indexStrs.length - 1].trim()));
+            if (current instanceof Object[]) {
+                Object[] arr = (Object[]) current;
+                if (finalIndex >= 0 && finalIndex < arr.length) {
+                    arr[finalIndex] = value;
+                } else {
+                    throw new BasicSyntaxError("Array index out of bounds: " + finalIndex);
+                }
+            } else {
+                throw new BasicSyntaxError("Invalid array assignment");
+            }
+        } catch (NumberFormatException e) {
+            throw new BasicSyntaxError("Invalid array index");
+        }
+    }
+    
+    private double toNumber(Object obj) {
+        if (obj instanceof Number) {
+            return ((Number) obj).doubleValue();
+        }
+        try {
+            return Double.parseDouble(obj.toString());
+        } catch (NumberFormatException e) {
+            return 0;
+        }
     }
 
     private void executeGoto(Statement stmt) throws BasicSyntaxError {
         String args = stmt.getArgs().trim();
         try {
+            // First try to parse as a literal line number
             int lineNumber = Integer.parseInt(args);
             int lineIndex = program.findLineIndex(lineNumber);
             gotoLocation = new ControlLocation(lineIndex, 0);
         } catch (NumberFormatException e) {
-            throw new BasicSyntaxError("Invalid line number in GOTO: " + args);
+            // If not a literal number, evaluate as an expression (computed GOTO)
+            Object result = evaluateExpression(args);
+            if (result instanceof Number) {
+                int lineNumber = ((Number) result).intValue();
+                int lineIndex = program.findLineIndex(lineNumber);
+                gotoLocation = new ControlLocation(lineIndex, 0);
+            } else {
+                throw new BasicSyntaxError("Invalid line number in GOTO: " + args + " (evaluated to: " + result + ")");
+            }
         }
     }
 
@@ -176,8 +290,24 @@ public class Executor {
             gosubStack.push(nextLocation);
         }
         
-        // Execute the GOTO part
-        executeGoto(stmt);
+        // Handle computed GOSUB (similar to computed GOTO)
+        String args = stmt.getArgs().trim();
+        try {
+            // First try to parse as a literal line number
+            int lineNumber = Integer.parseInt(args);
+            int lineIndex = program.findLineIndex(lineNumber);
+            gotoLocation = new ControlLocation(lineIndex, 0);
+        } catch (NumberFormatException e) {
+            // If not a literal number, evaluate as an expression (computed GOSUB)
+            Object result = evaluateExpression(args);
+            if (result instanceof Number) {
+                int lineNumber = ((Number) result).intValue();
+                int lineIndex = program.findLineIndex(lineNumber);
+                gotoLocation = new ControlLocation(lineIndex, 0);
+            } else {
+                throw new BasicSyntaxError("Invalid line number in GOSUB: " + args + " (evaluated to: " + result + ")");
+            }
+        }
     }
 
     private void executeReturn() throws BasicSyntaxError {
@@ -251,7 +381,7 @@ public class Executor {
         }
     }
 
-    private void executeIf(Statement stmt) throws BasicSyntaxError {
+    private void executeIf(Statement stmt) throws BasicSyntaxError, BasicRuntimeError {
         if (!(stmt instanceof IfStatement)) {
             throw new BasicSyntaxError("Invalid IF statement");
         }
@@ -259,14 +389,78 @@ public class Executor {
         IfStatement ifStmt = (IfStatement) stmt;
         String condition = ifStmt.getCondition();
         
-        // TODO: Implement proper condition evaluation
-        // For now, just handle simple cases
         boolean result = evaluateCondition(condition);
         
-        if (!result) {
-            // Skip to next line if condition is false
-            gotoLocation = getNextLine();
+        if (stmt instanceof IfThenElseStatement) {
+            IfThenElseStatement ifThenElseStmt = (IfThenElseStatement) stmt;
+            if (result) {
+                // Execute the THEN statements
+                executeThenStatements(ifThenElseStmt.getThenStatements());
+            } else {
+                // Execute the ELSE statements
+                executeThenStatements(ifThenElseStmt.getElseStatements());
+            }
+            // Whether true or false, we continue to the next statement after IF
+        } else if (stmt instanceof IfThenStatement) {
+            IfThenStatement ifThenStmt = (IfThenStatement) stmt;
+            if (result) {
+                // Execute the THEN statements
+                executeThenStatements(ifThenStmt.getThenStatements());
+            }
+            // Whether true or false, we continue to the next statement after IF
+        } else {
+            // Simple IF without THEN - skip to next line if false
+            if (!result) {
+                gotoLocation = getNextLine();
+            }
         }
+    }
+    
+    private void executeThenStatements(String thenStatements) throws BasicSyntaxError, BasicRuntimeError {
+        // Parse and execute the statements after THEN
+        List<String> statements = smartSplit(thenStatements, ':');
+        
+        for (String statementText : statements) {
+            statementText = statementText.trim();
+            if (!statementText.isEmpty()) {
+                Statement stmt = BasicLoader.parseStatement(statementText);
+                executeStatement(stmt);
+                
+                // If a control transfer occurred during THEN execution, stop processing more statements
+                if (gotoLocation != null) {
+                    break;
+                }
+            }
+        }
+    }
+    
+    /**
+     * Smart split that doesn't split on separators inside string literals
+     */
+    private static List<String> smartSplit(String text, char separator) {
+        List<String> parts = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        boolean inString = false;
+        
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            
+            if (c == '"') {
+                inString = !inString;
+                current.append(c);
+            } else if (c == separator && !inString) {
+                parts.add(current.toString());
+                current.setLength(0);
+            } else {
+                current.append(c);
+            }
+        }
+        
+        if (current.length() > 0) {
+            parts.add(current.toString());
+        }
+        
+        return parts;
     }
 
     private void executeClear(Statement stmt) {
@@ -274,59 +468,150 @@ public class Executor {
         // In some BASIC dialects, it can take parameters for memory allocation
         symbols.clear();
     }
-
-    /**
-     * Simple expression evaluator - needs major expansion
-     */
-    private Object evaluateExpression(String expression) {
-        expression = expression.trim();
-        
-        // Handle string literals
-        if (expression.startsWith("\"") && expression.endsWith("\"")) {
-            return expression.substring(1, expression.length() - 1);
+    
+    private void executeDim(Statement stmt) throws BasicSyntaxError {
+        if (!(stmt instanceof DimStatement)) {
+            throw new BasicSyntaxError("Invalid DIM statement");
         }
         
-        // Handle simple addition (e.g., F1+F2)
-        if (expression.contains("+") && !expression.startsWith("\"")) {
-            String[] parts = expression.split("\\+");
-            if (parts.length == 2) {
-                Object left = evaluateExpression(parts[0].trim());
-                Object right = evaluateExpression(parts[1].trim());
-                if (left instanceof Number && right instanceof Number) {
-                    return ((Number) left).doubleValue() + ((Number) right).doubleValue();
-                }
-            }
+        DimStatement dimStmt = (DimStatement) stmt;
+        
+        for (DimStatement.ArrayDeclaration declaration : dimStmt.getArrayDeclarations()) {
+            String arrayName = declaration.getName();
+            Object array = declaration.createArray();
+            
+            // Store arrays with a special prefix to distinguish from scalar variables
+            String arrayKey = "ARRAY:" + arrayName;
+            symbols.put(arrayKey, array);
+        }
+    }
+    
+    private void executeInput(Statement stmt) throws BasicSyntaxError, BasicRuntimeError {
+        if (!(stmt instanceof InputStatement)) {
+            throw new BasicSyntaxError("Invalid INPUT statement");
         }
         
-        // Handle numeric literals
+        InputStatement inputStmt = (InputStatement) stmt;
+        
+        // Display prompt if present
+        if (inputStmt.hasPrompt()) {
+            System.out.print(inputStmt.getPrompt());
+        } else {
+            System.out.print("? "); // Default BASIC prompt
+        }
+        
+        // Read input from console
         try {
-            if (expression.contains(".")) {
-                return Double.parseDouble(expression);
-            } else {
-                return Integer.parseInt(expression);
+            java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.InputStreamReader(System.in));
+            String input = reader.readLine();
+            
+            if (input == null) {
+                input = ""; // Handle EOF
             }
-        } catch (NumberFormatException e) {
-            // Not a number, try as variable
+            
+            // Parse input values (comma-separated)
+            String[] inputValues = input.split(",");
+            java.util.List<String> variables = inputStmt.getVariables();
+            
+            // Assign values to variables
+            for (int i = 0; i < variables.size(); i++) {
+                String variable = variables.get(i);
+                String value = "";
+                
+                if (i < inputValues.length) {
+                    value = inputValues[i].trim();
+                }
+                
+                // Convert and store the value
+                Object convertedValue;
+                if (variable.endsWith("$")) {
+                    // String variable
+                    convertedValue = value;
+                } else {
+                    // Numeric variable
+                    try {
+                        if (value.contains(".")) {
+                            convertedValue = Double.parseDouble(value);
+                        } else if (!value.isEmpty()) {
+                            convertedValue = Integer.parseInt(value);
+                        } else {
+                            convertedValue = 0; // Default for empty input
+                        }
+                    } catch (NumberFormatException e) {
+                        convertedValue = 0; // Default for invalid numeric input
+                    }
+                }
+                
+                symbols.put(variable, convertedValue);
+            }
+            
+        } catch (java.io.IOException e) {
+            throw new BasicRuntimeError("Error reading input: " + e.getMessage());
+        }
+    }
+    
+    private void executeRead(Statement stmt) throws BasicSyntaxError, BasicRuntimeError {
+        if (!(stmt instanceof ReadStatement)) {
+            throw new BasicSyntaxError("Invalid READ statement");
         }
         
-        // Handle variables
-        String varName = expression.toUpperCase();
-        if (symbols.containsKey(varName)) {
-            return symbols.get(varName);
+        ReadStatement readStmt = (ReadStatement) stmt;
+        
+        for (String variable : readStmt.getVariables()) {
+            if (dataPointer >= dataValues.size()) {
+                throw new BasicRuntimeError("Out of data");
+            }
+            
+            Object value = dataValues.get(dataPointer++);
+            symbols.put(variable, value);
+        }
+    }
+    
+    private void executeData(Statement stmt) throws BasicSyntaxError {
+        if (!(stmt instanceof DataStatement)) {
+            throw new BasicSyntaxError("Invalid DATA statement");
         }
         
-        // TODO: Handle expressions with operators, function calls, etc.
+        DataStatement dataStmt = (DataStatement) stmt;
+        dataValues.addAll(dataStmt.getDataValues());
+    }
+    
+    private void executeRestore(Statement stmt) throws BasicSyntaxError {
+        String args = stmt.getArgs().trim();
         
-        return 0; // Default value
+        if (args.isEmpty()) {
+            // RESTORE without arguments resets to beginning
+            dataPointer = 0;
+        } else {
+            // RESTORE with line number (not implemented yet)
+            throw new BasicSyntaxError("RESTORE with line number not yet implemented");
+        }
+    }
+    
+    private void executeDef(Statement stmt) throws BasicSyntaxError {
+        if (!(stmt instanceof DefStatement)) {
+            throw new BasicSyntaxError("Invalid DEF statement");
+        }
+        
+        DefStatement defStmt = (DefStatement) stmt;
+        System.out.println("DEBUG: Registering user function: " + defStmt.getFunctionName() + " = " + defStmt.getExpression());
+        userFunctions.put(defStmt.getFunctionName(), defStmt);
     }
 
     /**
-     * Simple condition evaluator - needs major expansion
+     * Expression evaluator using the dedicated ExpressionEvaluator class
+     */
+    private Object evaluateExpression(String expression) {
+        ExpressionEvaluator evaluator = new ExpressionEvaluator(symbols, userFunctions);
+        return evaluator.evaluate(expression);
+    }
+
+    /**
+     * Condition evaluator using the dedicated ExpressionEvaluator class
      */
     private boolean evaluateCondition(String condition) {
-        // TODO: Implement proper condition evaluation
-        // For now, just return true to allow simple testing
-        return true;
+        ExpressionEvaluator evaluator = new ExpressionEvaluator(symbols, userFunctions);
+        return evaluator.evaluateCondition(condition);
     }
 
     // Utility methods
@@ -376,7 +661,14 @@ public class Executor {
     }
 
     public int getSymbolCount() {
-        return symbols.size();
+        // Count only user variables, not built-in functions
+        return (int) symbols.entrySet().stream()
+            .filter(entry -> !"BUILTIN_FUNCTION".equals(entry.getValue()))
+            .count();
+    }
+
+    public Map<String, Object> getSymbols() {
+        return new HashMap<>(symbols);
     }
 
     public void close() throws IOException {

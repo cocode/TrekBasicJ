@@ -36,6 +36,15 @@ public class TestCaseBase {
      */
     protected void assertValue(Executor executor, String symbol, Object expectedValue) {
         Object value = executor.getSymbol(symbol);
+        if (!expectedValue.equals(value)) {
+            // Print the full symbol table for debugging
+            System.err.println("ASSERTION FAILED: Expected " + symbol + " = " + expectedValue + ", but got " + value);
+            System.err.println("Full symbol table:");
+            Map<String, Object> symbols = executor.getSymbols();
+            for (Map.Entry<String, Object> entry : symbols.entrySet()) {
+                System.err.println("  " + entry.getKey() + " = " + entry.getValue());
+            }
+        }
         assertEquals(expectedValue, value);
     }
     

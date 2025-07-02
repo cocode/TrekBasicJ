@@ -45,15 +45,49 @@ public class BasicLoader {
      */
     public static Program tokenize(List<String> lines) throws BasicSyntaxError {
         List<ProgramLine> programLines = new ArrayList<>();
+        Set<Integer> seenLineNumbers = new HashSet<>();
         
         for (String line : lines) {
             if (!line.trim().isEmpty()) {
                 ProgramLine programLine = tokenizeLine(line);
+                if (seenLineNumbers.contains(programLine.getLine())) {
+                    throw new BasicSyntaxError("Duplicate line number: " + programLine.getLine());
+                }
+                seenLineNumbers.add(programLine.getLine());
                 programLines.add(programLine);
             }
         }
         
         return new Program(programLines);
+    }
+    
+    /**
+     * Parse an IF statement that may contain THEN and ELSE
+     */
+    private static Statement parseIfStatement(String keyword, String args) throws BasicSyntaxError {
+        String upperArgs = args.toUpperCase();
+        int thenIndex = upperArgs.indexOf("THEN");
+        
+        if (thenIndex == -1) {
+            // Simple IF without THEN
+            return new IfStatement(keyword, args);
+        }
+        
+        String condition = args.substring(0, thenIndex).trim();
+        String afterThen = args.substring(thenIndex + 4).trim();
+        
+        // Check for ELSE clause
+        int elseIndex = upperArgs.indexOf("ELSE", thenIndex + 4);
+        if (elseIndex == -1) {
+            // IF...THEN without ELSE
+            return new IfThenStatement(keyword, condition, afterThen);
+        }
+        
+        // IF...THEN...ELSE
+        String thenPart = args.substring(thenIndex + 4, elseIndex).trim();
+        String elsePart = args.substring(elseIndex + 4).trim();
+        
+        return new IfThenElseStatement(keyword, condition, thenPart, elsePart);
     }
     
     /**
@@ -90,9 +124,9 @@ public class BasicLoader {
     }
     
     /**
-     * Parse a single statement from its text
+     * Parse a single statement from its text (public for use by Executor)
      */
-    private static Statement parseStatement(String statementText) throws BasicSyntaxError {
+    public static Statement parseStatement(String statementText) throws BasicSyntaxError {
         statementText = statementText.trim();
         if (statementText.isEmpty()) {
             throw new BasicSyntaxError("Empty statement");
@@ -126,6 +160,39 @@ public class BasicLoader {
                 keyword = statementText.substring(0, spaceIndex).toUpperCase();
                 args = statementText.substring(spaceIndex + 1).trim();
             }
+        } else if (statementText.toUpperCase().startsWith("IF") && statementText.length() > 2) {
+            char nextChar = statementText.charAt(2);
+            if (nextChar != ' ' && nextChar != '\t') {
+                // IF followed by condition without space (e.g., IFX>Y)
+                keyword = "IF";
+                args = statementText.substring(2).trim();
+            } else {
+                int spaceIndex = statementText.indexOf(' ');
+                keyword = statementText.substring(0, spaceIndex).toUpperCase();
+                args = statementText.substring(spaceIndex + 1).trim();
+            }
+        } else if (statementText.toUpperCase().startsWith("DIM") && statementText.length() > 3) {
+            char nextChar = statementText.charAt(3);
+            if (nextChar != ' ' && nextChar != '\t') {
+                // DIM followed by array declaration without space (e.g., DIMA(2))
+                keyword = "DIM";
+                args = statementText.substring(3).trim();
+            } else {
+                int spaceIndex = statementText.indexOf(' ');
+                keyword = statementText.substring(0, spaceIndex).toUpperCase();
+                args = statementText.substring(spaceIndex + 1).trim();
+            }
+        } else if (statementText.toUpperCase().startsWith("FOR") && statementText.length() > 3) {
+            char nextChar = statementText.charAt(3);
+            if (nextChar != ' ' && nextChar != '\t') {
+                // FOR followed by variable without space (e.g., FORI=1TO8)
+                keyword = "FOR";
+                args = statementText.substring(3).trim();
+            } else {
+                int spaceIndex = statementText.indexOf(' ');
+                keyword = statementText.substring(0, spaceIndex).toUpperCase();
+                args = statementText.substring(spaceIndex + 1).trim();
+            }
         } else {
             int spaceIndex = statementText.indexOf(' ');
             if (spaceIndex == -1) {
@@ -148,14 +215,14 @@ public class BasicLoader {
             case "RETURN" -> new BasicStatement(keyword, "");
             case "FOR" -> new ForStatement(keyword, args);
             case "NEXT" -> new BasicStatement(keyword, args);
-            case "IF" -> new IfStatement(keyword, args);
+            case "IF" -> parseIfStatement(keyword, args);
             case "THEN" -> new BasicStatement(keyword, args);
             case "ELSE" -> new BasicStatement(keyword, args);
-            case "DIM" -> new BasicStatement(keyword, args);
-            case "DEF" -> new BasicStatement(keyword, args);
-            case "INPUT" -> new BasicStatement(keyword, args);
-            case "READ" -> new BasicStatement(keyword, args);
-            case "DATA" -> new BasicStatement(keyword, args);
+            case "DIM" -> new DimStatement(keyword, args);
+            case "DEF" -> new DefStatement(keyword, args);
+            case "INPUT" -> new InputStatement(keyword, args);
+            case "READ" -> new ReadStatement(keyword, args);
+            case "DATA" -> new DataStatement(keyword, args);
             case "RESTORE" -> new BasicStatement(keyword, args);
             case "CLEAR" -> new BasicStatement(keyword, args);
             default -> {
