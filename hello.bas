@@ -1,0 +1,4 @@
+10 PRINT "Hello World"
+20 A = 42
+30 PRINT A
+40 END 
