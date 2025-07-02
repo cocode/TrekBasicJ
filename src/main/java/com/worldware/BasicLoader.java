@@ -275,7 +275,8 @@ public class BasicLoader {
             default -> {
                 // Check if it's an assignment (no keyword, just variable = expression)
                 if (statementText.contains("=") && !statementText.contains("==") && !statementText.contains("<=") && !statementText.contains(">=")) {
-                    yield new AssignmentStatement("LET", statementText);
+                    String assignmentArgs = keyword.equals("LET") ? args : statementText;
+                    yield new AssignmentStatement("LET", assignmentArgs);
                 } else {
                     // Numeric-only statement treated as GOTO <number>
                     if (statementText.matches("\\d+")) {
