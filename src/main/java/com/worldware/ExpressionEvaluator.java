@@ -200,7 +200,7 @@ public class ExpressionEvaluator {
 
         private Object parsePow() {
             Object left = parseUnary();
-            if (look.type == TokType.OP && look.text.equals("^")) {
+            while (look.type == TokType.OP && look.text.equals("^")) {
                 consume();
                 Object right = parseUnary();
                 left = performArithmetic(left, right, "^");
