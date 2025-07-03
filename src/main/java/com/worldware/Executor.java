@@ -166,7 +166,7 @@ public class Executor {
         }
     }
 
-    private void executePrint(Statement stmt) {
+    private void executePrint(Statement stmt) throws BasicRuntimeError {
         if (stmt.getArgs().isEmpty()) {
             System.out.println();
             return;
@@ -249,7 +249,7 @@ public class Executor {
         if (newline) System.out.println();
     }
 
-    private void executeAssignment(Statement stmt) throws BasicSyntaxError {
+    private void executeAssignment(Statement stmt) throws BasicSyntaxError, BasicRuntimeError {
         if (!(stmt instanceof AssignmentStatement)) {
             throw new BasicSyntaxError("Invalid assignment statement");
         }
@@ -277,7 +277,7 @@ public class Executor {
         }
     }
     
-    private void executeArrayAssignment(AssignmentStatement assignment, Object value) throws BasicSyntaxError {
+    private void executeArrayAssignment(AssignmentStatement assignment, Object value) throws BasicSyntaxError, BasicRuntimeError {
         String arrayName = assignment.getArrayName();
         String indices = assignment.getArrayIndices();
         
@@ -340,7 +340,7 @@ public class Executor {
         }
     }
 
-    private void executeGoto(Statement stmt) throws BasicSyntaxError {
+    private void executeGoto(Statement stmt) throws BasicSyntaxError, BasicRuntimeError {
         String args = stmt.getArgs().trim();
         try {
             // First try to parse as a literal line number
@@ -360,7 +360,7 @@ public class Executor {
         }
     }
 
-    private void executeGosub(Statement stmt) throws BasicSyntaxError {
+    private void executeGosub(Statement stmt) throws BasicSyntaxError, BasicRuntimeError {
         // Save current location for RETURN
         ControlLocation nextLocation = getNextStatement();
         if (nextLocation != null) {
@@ -423,7 +423,18 @@ public class Executor {
         // Set loop variable to start value
         symbols.put(var.toUpperCase(), startValue);
         
-        // Push FOR record onto stack
+        // If we re-enter the same FOR line (via GOTO) while its record is still
+        // on the stack, classic BASIC resets the loop by discarding the old
+        // control record and pushing a fresh one, which also re-initialises
+        // the loop variable.  This allows patterns like "GOTO 100" inside the
+        // loop body to restart the iteration sequence.
+        if (!forStack.isEmpty()) {
+            ForRecord top = forStack.peek();
+            if (top.variable().equals(var.toUpperCase()) && top.location().equals(location)) {
+                forStack.pop();
+            }
+        }
+
         forStack.push(new ForRecord(var.toUpperCase(), endValue, stepValue, location));
     }
 
@@ -703,7 +714,7 @@ public class Executor {
      * Execute an ON GOTO / ON GOSUB computed jump
      * Syntax:  ON <expr> GOTO line1,line2,...   or   ON <expr> GOSUB line1,line2,...
      */
-    private void executeOn(Statement stmt) throws BasicSyntaxError {
+    private void executeOn(Statement stmt) throws BasicSyntaxError, BasicRuntimeError {
         String upper = stmt.getArgs().toUpperCase();
         boolean gosub = upper.contains("GOSUB");
         String keyword = gosub ? "GOSUB" : "GOTO";
@@ -753,17 +764,31 @@ public class Executor {
     /**
      * Expression evaluator using the dedicated ExpressionEvaluator class
      */
-    private Object evaluateExpression(String expression) {
+    private Object evaluateExpression(String expression) throws BasicRuntimeError {
         ExpressionEvaluator evaluator = new ExpressionEvaluator(symbols, userFunctions);
-        return evaluator.evaluate(expression);
+        try {
+            return evaluator.evaluate(expression);
+        } catch (RuntimeException re) {
+            if (re.getMessage()!=null && re.getMessage().startsWith("Undefined variable:")) {
+                throw new BasicRuntimeError(re.getMessage());
+            }
+            throw re;
+        }
     }
 
     /**
      * Condition evaluator using the dedicated ExpressionEvaluator class
      */
-    private boolean evaluateCondition(String condition) {
+    private boolean evaluateCondition(String condition) throws BasicRuntimeError {
         ExpressionEvaluator evaluator = new ExpressionEvaluator(symbols, userFunctions);
-        return evaluator.evaluateCondition(condition);
+        try {
+            return evaluator.evaluateCondition(condition);
+        } catch (RuntimeException re) {
+            if (re.getMessage()!=null && re.getMessage().startsWith("Undefined variable:")) {
+                throw new BasicRuntimeError(re.getMessage());
+            }
+            throw re;
+        }
     }
 
     // Utility methods

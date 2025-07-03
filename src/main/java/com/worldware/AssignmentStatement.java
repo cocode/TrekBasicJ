@@ -5,8 +5,17 @@ package com.worldware;
  */
 public class AssignmentStatement extends BasicStatement {
     
-    public AssignmentStatement(String keyword, String args) {
+    public AssignmentStatement(String keyword, String args) throws BasicSyntaxError {
         super(keyword, args);
+
+        // Validate variable name syntax immediately
+        String var = getVariable();
+        String canonical = var;
+        int parIdx = canonical.indexOf('(');
+        if (parIdx != -1) canonical = canonical.substring(0, parIdx);
+        if (!canonical.matches("[A-Z](\\d)?\\$?")) {
+            throw new BasicSyntaxError("Invalid variable name: " + canonical);
+        }
     }
     
     /**

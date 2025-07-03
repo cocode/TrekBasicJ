@@ -96,10 +96,25 @@ public class ExpressionEvaluator {
                 }
                 return new Token(TokType.IDENT, src.substring(start, idx));
             }
-            // Single-char tokens & operators
+            // Operators and punctuation
+
+            // Handle two-character comparison operators: <= >= <>
+            if (ch == '<' || ch == '>') {
+                if (idx + 1 < src.length()) {
+                    char n = src.charAt(idx + 1);
+                    if (n == '=' || (ch == '<' && n == '>')) {
+                        idx += 2; // consume both
+                        return new Token(TokType.OP, "" + ch + n);
+                    }
+                }
+                idx++; // single char < or >
+                return new Token(TokType.OP, String.valueOf(ch));
+            }
+
+            // Single-character tokens & operators
             idx++;
             return switch (ch) {
-                case '+', '-', '*', '/', '^', '=', '<', '>' -> new Token(TokType.OP, String.valueOf(ch));
+                case '+', '-', '*', '/', '^', '=' -> new Token(TokType.OP, String.valueOf(ch));
                 case '(', '[' -> new Token(TokType.LPAREN, "(");
                 case ')', ']' -> new Token(TokType.RPAREN, ")");
                 case ',' -> new Token(TokType.COMMA, ",");
@@ -110,6 +125,20 @@ public class ExpressionEvaluator {
         private void skipWS() {
             while (idx < src.length() && Character.isWhitespace(src.charAt(idx))) idx++;
         }
+    }
+
+    /**
+     * Utility for test/diagnostic code: returns the raw token stream produced by the
+     * lexer without performing any evaluation or symbol look-ups.
+     */
+    public static java.util.List<String> tokenize(String expression) {
+        Lexer lx = new Lexer(expression);
+        java.util.List<String> tokens = new java.util.ArrayList<>();
+        Token t;
+        while ((t = lx.next()).type != TokType.EOF) {
+            tokens.add(t.type + ":" + t.text);
+        }
+        return tokens;
     }
 
     /* --------------------------------------------------------------------- */
@@ -251,8 +280,12 @@ public class ExpressionEvaluator {
                     // array access
                     return arrayAccess(name, args);
                 }
-                // simple variable
-                return symbols.getOrDefault(name, 0);
+                // simple variable – must be defined
+                Object val = symbols.get(name);
+                if (val == null) {
+                    throw new RuntimeException("Undefined variable: " + name);
+                }
+                return val;
             }
             // parentheses
             if (accept(TokType.LPAREN, null)) {
