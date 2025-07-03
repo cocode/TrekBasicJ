@@ -611,7 +611,11 @@ public class Executor {
                 Object convertedValue;
                 if (variable.endsWith("$")) {
                     // String variable
-                    convertedValue = value;
+                    if (Dialect.UPPERCASE_INPUT == 1) {
+                        convertedValue = value.toUpperCase();
+                    } else {
+                        convertedValue = value;
+                    }
                 } else {
                     // Numeric variable
                     try {
