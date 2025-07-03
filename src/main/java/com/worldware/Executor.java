@@ -225,10 +225,16 @@ public class Executor {
                 Object value;
                 if (part.startsWith("\"") && part.endsWith("\"")) {
                     value = part.substring(1, part.length() - 1);
+                    System.out.print(value);
                 } else {
                     value = evaluateExpression(part);
+                    // BASIC prints a leading space before positive numbers
+                    if (value instanceof Number num && num.doubleValue() >= 0) {
+                        System.out.print(" " + value);
+                    } else {
+                        System.out.print(value);
+                    }
                 }
-                System.out.print(value);
             }
 
             // Handle separator spacing (except after last item)
@@ -574,6 +580,7 @@ public class Executor {
         // Display prompt if present
         if (inputStmt.hasPrompt()) {
             System.out.print(inputStmt.getPrompt());
+            System.out.print(" ");
         } else {
             System.out.print("? "); // Default BASIC prompt
         }
