@@ -449,17 +449,18 @@ public class Executor {
             double step = ((Number) stepValue).doubleValue();
             double end = ((Number) endValue).doubleValue();
             
-            current += step;
-            symbols.put(var, current);
-            
-            // Check if loop should continue
-            boolean continueLoop = (step > 0) ? (current <= end) : (current >= end);
-            
+            double nextVal = current + step;
+
+            // Will the next value still be within bounds?
+            boolean continueLoop = (step > 0) ? (nextVal <= end) : (nextVal >= end);
+
             if (continueLoop) {
-                // Go back to the statement immediately following the FOR
+                // Advance variable and loop again
+                symbols.put(var, nextVal);
                 gotoLocation = getNextStatementFrom(forRecord.location());
             } else {
-                // Exit loop
+                // Clamp variable to final legal value (classic BASIC behaviour)
+                symbols.put(var, current);
                 forStack.pop();
             }
         }
@@ -507,11 +508,20 @@ public class Executor {
         for (String statementText : statements) {
             statementText = statementText.trim();
             if (!statementText.isEmpty()) {
+                // Parse and remember any pre-existing jump target
                 Statement stmt = BasicLoader.parseStatement(statementText);
+                ControlLocation beforeJump = gotoLocation; // may be null
+
+                // Execute the statement that belongs to the THEN-part
                 executeStatement(stmt);
-                
-                // If a control transfer occurred during THEN execution, stop processing more statements
-                if (gotoLocation != null) {
+
+                /*
+                 * Only stop iterating when this statement caused a *new* control
+                 * transfer.  Merely inheriting a gotoLocation that was already
+                 * set by a previous statement must not prevent the remaining
+                 * THEN-statements from running.  (Example: "IF X THEN A=1:B=2:GOTO 5000")
+                 */
+                if (gotoLocation != null && !gotoLocation.equals(beforeJump)) {
                     break;
                 }
             }

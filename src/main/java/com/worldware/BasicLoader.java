@@ -14,7 +14,7 @@ public class BasicLoader {
     /**
      * Smart split that doesn't split on separators inside string literals
      */
-    private static List<String> smartSplit(String text, char separator) {
+    static List<String> smartSplit(String text, char separator) {
         List<String> parts = new ArrayList<>();
         StringBuilder current = new StringBuilder();
         boolean inString = false;
