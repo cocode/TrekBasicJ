@@ -230,7 +230,7 @@ public class Executor {
                     value = evaluateExpression(part);
                     // BASIC prints a leading space before positive numbers
                     if (value instanceof Number num && num.doubleValue() >= 0) {
-                        System.out.print(" " + value);
+                        System.out.print(" " + value + " ");
                     } else {
                         System.out.print(value);
                     }
