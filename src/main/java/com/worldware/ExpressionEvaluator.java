@@ -436,7 +436,7 @@ public class ExpressionEvaluator {
         if (arr == null) return 0;
         Object current = arr;
         for (Object idxObj : indices) {
-            int idx = (int)toNumber(idxObj);
+            int idx = (int) toNumber(idxObj) - Dialect.ARRAY_OFFSET;
             if (current instanceof Object[] array) {
                 if (idx<0 || idx>=array.length) return 0;
                 current = array[idx];

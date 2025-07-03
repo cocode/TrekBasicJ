@@ -297,6 +297,7 @@ public class Executor {
             Object current = array;
             for (int i = 0; i < indexStrs.length - 1; i++) {
                 int index = (int) toNumber(evaluateExpression(indexStrs[i].trim()));
+                index -= Dialect.ARRAY_OFFSET;
                 
                 if (current instanceof Object[]) {
                     Object[] arr = (Object[]) current;
@@ -312,6 +313,7 @@ public class Executor {
             
             // Set the final element
             int finalIndex = (int) toNumber(evaluateExpression(indexStrs[indexStrs.length - 1].trim()));
+            finalIndex -= Dialect.ARRAY_OFFSET;
             if (current instanceof Object[]) {
                 Object[] arr = (Object[]) current;
                 if (finalIndex >= 0 && finalIndex < arr.length) {

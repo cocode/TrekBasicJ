@@ -136,13 +136,13 @@ public class BasicInterpreterTest extends TestCaseBase {
         assertNotNull(arrAObj);
         assertNotNull(arrCObj);
         Object[] arrA = (Object[]) arrAObj;
-        assertEquals(10, arrA.length); // 8 declared +2 spare
+        assertEquals(8, arrA.length);
 
         Object[] arrC = (Object[]) arrCObj;
-        assertEquals(5, arrC.length);   // 3 declared +2 spare (first dimension)
+        assertEquals(3, arrC.length);
         Object firstRow = arrC[0];
         assertTrue(firstRow instanceof Object[]);
-        assertEquals(4, ((Object[]) firstRow).length); // 2 declared +2 spare (second dim)
+        assertEquals(2, ((Object[]) firstRow).length);
     }
 
     @Test

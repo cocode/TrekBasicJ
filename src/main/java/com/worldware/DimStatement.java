@@ -123,7 +123,7 @@ public class DimStatement extends BasicStatement {
                 return isString ? "" : 0;
             }
             
-            int size = dims.get(index) + 2;
+            int size = dims.get(index) + 1 - Dialect.ARRAY_OFFSET;
             Object[] array = new Object[size];
             
             for (int i = 0; i < size; i++) {
