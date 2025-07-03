@@ -141,7 +141,11 @@ public class Executor {
             case "PRINT" -> executePrint(stmt);
             case "LET" -> executeAssignment(stmt);
             case "END" -> { runStatus = RunStatus.END_CMD; }
-            case "STOP" -> { runStatus = RunStatus.END_STOP; }
+            case "STOP" -> {
+                Object aVar = symbols.get("A$");
+                System.out.printf("STOP encountered at line %d (A$=%s, len=%s)%n", getCurrentLine().getLine(), aVar, aVar==null?"null":aVar.toString().length());
+                runStatus = RunStatus.END_STOP;
+            }
             case "GOTO" -> executeGoto(stmt);
             case "GOSUB" -> executeGosub(stmt);
             case "RETURN" -> executeReturn();
@@ -424,6 +428,7 @@ public class Executor {
             IfThenStatement ifThenStmt = (IfThenStatement) stmt;
             if (result) {
                 // Execute the THEN statements
+                System.out.println("DEBUG IF TRUE cond: " + ifThenStmt.getCondition());
                 executeThenStatements(ifThenStmt.getThenStatements());
             }
             // Whether true or false, we continue to the next statement after IF
