@@ -167,25 +167,80 @@ public class Executor {
     }
 
     private void executePrint(Statement stmt) {
-        // Improved PRINT: handle semicolon-separated expressions
+        if (stmt.getArgs().isEmpty()) {
+            System.out.println();
+            return;
+        }
+
+        // Parse print list handling separators ; and , at top level only
+        List<String> items = new ArrayList<>();
+        List<Character> seps = new ArrayList<>(); // separator preceding item (except first)
+        StringBuilder current = new StringBuilder();
+        boolean inString = false;
+        int parenDepth = 0;
+
         String args = stmt.getArgs();
-        if (args.isEmpty()) {
-            System.out.println(); // Empty line
-        } else {
-            String[] parts = args.split(";");
-            for (String part : parts) {
-                part = part.trim();
-                if (part.startsWith("\"") && part.endsWith("\"")) {
-                    // String literal
-                    System.out.print(part.substring(1, part.length() - 1));
-                } else if (!part.isEmpty()) {
-                    // Expression or variable
-                    Object value = evaluateExpression(part);
-                    System.out.print(value);
+        for (int i = 0; i < args.length(); i++) {
+            char c = args.charAt(i);
+
+            if (c == '"') {
+                inString = !inString;
+                current.append(c);
+                continue;
+            }
+
+            if (!inString) {
+                if (c == '(') {
+                    parenDepth++;
+                } else if (c == ')') {
+                    if (parenDepth > 0) parenDepth--;
+                }
+
+                if (parenDepth == 0 && (c == ';' || c == ',')) {
+                    items.add(current.toString());
+                    seps.add(c);
+                    current.setLength(0);
+                    continue; // do not keep separator
                 }
             }
-            System.out.println(); // End the line
+
+            current.append(c);
         }
+        items.add(current.toString());
+
+        // Determine newline requirement by looking at last non-space char
+        boolean newline = true;
+        for (int i = args.length() - 1; i >= 0; i--) {
+            char c = args.charAt(i);
+            if (!Character.isWhitespace(c)) {
+                if (c == ';' || c == ',') newline = false;
+                break;
+            }
+        }
+
+        // Print items
+        for (int idx = 0; idx < items.size(); idx++) {
+            String part = items.get(idx).trim();
+            if (!part.isEmpty()) {
+                Object value;
+                if (part.startsWith("\"") && part.endsWith("\"")) {
+                    value = part.substring(1, part.length() - 1);
+                } else {
+                    value = evaluateExpression(part);
+                }
+                System.out.print(value);
+            }
+
+            // Handle separator spacing (except after last item)
+            if (idx < seps.size()) {
+                char sep = seps.get(idx);
+                if (sep == ',') {
+                    System.out.print("    "); // simple tab spacing approximation
+                } // semicolon -> no extra spacing
+            }
+        }
+
+        if (newline) System.out.println();
     }
 
     private void executeAssignment(Statement stmt) throws BasicSyntaxError {
@@ -428,7 +483,6 @@ public class Executor {
             IfThenStatement ifThenStmt = (IfThenStatement) stmt;
             if (result) {
                 // Execute the THEN statements
-                System.out.println("DEBUG IF TRUE cond: " + ifThenStmt.getCondition());
                 executeThenStatements(ifThenStmt.getThenStatements());
             }
             // Whether true or false, we continue to the next statement after IF
