@@ -38,7 +38,7 @@ public class BasicExpressionsTest {
     @Test
     public void testPrecedencePower() {
         assertNumberEquals(160, ev.evaluate("1 + 2 * 3 ^ 4 - 3"));
-        assertNumberEquals(8,  ev.evaluate("2^3^2"));
+        assertNumberEquals(64,  ev.evaluate("2^3^2"));
     }
 
     @Test
