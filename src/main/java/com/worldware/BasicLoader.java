@@ -64,7 +64,7 @@ public class BasicLoader {
                 // Detect the keyword THEN (word boundary, case-insensitive)
                 if (!afterThen && (c == 'T' || c == 't')) {
                     String upperRest = text.substring(i).toUpperCase();
-                    if (upperRest.startsWith("THEN") && (i == 0 || Character.isWhitespace(text.charAt(i - 1)))) {
+                    if (upperRest.startsWith("THEN") && (i == 0 || !Character.isLetter(text.charAt(i - 1)))) {
                         afterThen = true;
                     }
                 }
@@ -334,6 +334,16 @@ public class BasicLoader {
             if (nextChar != ' ' && nextChar != '\t') {
                 // CLEAR followed by variable without space (e.g., CLEARX)
                 keyword = "CLEAR";
+                args = statementText.substring(5).trim();
+            } else {
+                int spaceIndex = statementText.indexOf(' ');
+                keyword = statementText.substring(0, spaceIndex).toUpperCase();
+                args = statementText.substring(spaceIndex + 1).trim();
+            }
+        } else if (statementText.toUpperCase().startsWith("INPUT") && statementText.length() > 5) {
+            char nextChar = statementText.charAt(5);
+            if (nextChar != ' ' && nextChar != '\t') {
+                keyword = "INPUT";
                 args = statementText.substring(5).trim();
             } else {
                 int spaceIndex = statementText.indexOf(' ');
