@@ -13,7 +13,7 @@ public class AssignmentStatement extends BasicStatement {
         String canonical = var;
         int parIdx = canonical.indexOf('(');
         if (parIdx != -1) canonical = canonical.substring(0, parIdx);
-        if (!canonical.matches("[A-Z](\\d)?\\$?")) {
+        if (!canonical.matches("(?i)[A-Z](\\d)?\\$?")) {
             throw new BasicSyntaxError("Invalid variable name: " + canonical);
         }
     }
