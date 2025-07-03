@@ -159,12 +159,24 @@ public class BasicLoader {
         List<String> statementParts = splitStatements(rest);
         List<Statement> statements = new ArrayList<>();
         
-        for (String part : statementParts) {
-            part = part.trim();
-            if (!part.isEmpty()) {
-                Statement stmt = parseStatement(part);
-                statements.add(stmt);
+        for (int idx = 0; idx < statementParts.size(); idx++) {
+            String part = statementParts.get(idx).trim();
+            if (part.isEmpty()) continue;
+
+            // If a REM appears, swallow the rest of the parts so that any ':'
+            // inside the comment is preserved.
+            if (part.toUpperCase().startsWith("REM")) {
+                // Re-join remaining segments with ':'
+                StringBuilder remBuilder = new StringBuilder(part);
+                for (int j = idx + 1; j < statementParts.size(); j++) {
+                    remBuilder.append(":").append(statementParts.get(j));
+                }
+                part = remBuilder.toString();
+                idx = statementParts.size(); // exit loop after processing
             }
+
+            Statement stmt = parseStatement(part);
+            statements.add(stmt);
         }
         
         return new ProgramLine(lineNumber, statements, line);
@@ -240,6 +252,94 @@ public class BasicLoader {
                 keyword = statementText.substring(0, spaceIndex).toUpperCase();
                 args = statementText.substring(spaceIndex + 1).trim();
             }
+        } else if (statementText.toUpperCase().startsWith("GOTO") && statementText.length() > 4) {
+            char nextChar = statementText.charAt(4);
+            if (nextChar != ' ' && nextChar != '\t') {
+                // GOTO followed by line number without space (e.g., GOTO100)
+                keyword = "GOTO";
+                args = statementText.substring(4).trim();
+            } else {
+                int spaceIndex = statementText.indexOf(' ');
+                keyword = statementText.substring(0, spaceIndex).toUpperCase();
+                args = statementText.substring(spaceIndex + 1).trim();
+            }
+        } else if (statementText.toUpperCase().startsWith("GOSUB") && statementText.length() > 5) {
+            char nextChar = statementText.charAt(5);
+            if (nextChar != ' ' && nextChar != '\t') {
+                // GOSUB followed by line number without space
+                keyword = "GOSUB";
+                args = statementText.substring(5).trim();
+            } else {
+                int spaceIndex = statementText.indexOf(' ');
+                keyword = statementText.substring(0, spaceIndex).toUpperCase();
+                args = statementText.substring(spaceIndex + 1).trim();
+            }
+        } else if (statementText.toUpperCase().startsWith("ON") && statementText.length() > 2) {
+            char nextChar = statementText.charAt(2);
+            if (nextChar != ' ' && nextChar != '\t') {
+                // ON followed by expression without space (e.g., ONXGOTO100,200)
+                keyword = "ON";
+                args = statementText.substring(2).trim();
+            } else {
+                int spaceIndex = statementText.indexOf(' ');
+                keyword = statementText.substring(0, spaceIndex).toUpperCase();
+                args = statementText.substring(spaceIndex + 1).trim();
+            }
+        } else if (statementText.toUpperCase().startsWith("RETURN") && statementText.length() > 6) {
+            char nextChar = statementText.charAt(6);
+            if (nextChar != ' ' && nextChar != '\t') {
+                // RETURN followed by variable without space (e.g., RETURNX)
+                keyword = "RETURN";
+                args = statementText.substring(6).trim();
+            } else {
+                int spaceIndex = statementText.indexOf(' ');
+                keyword = statementText.substring(0, spaceIndex).toUpperCase();
+                args = statementText.substring(spaceIndex + 1).trim();
+            }
+        } else if (statementText.toUpperCase().startsWith("THEN") && statementText.length() > 4) {
+            char nextChar = statementText.charAt(4);
+            if (nextChar != ' ' && nextChar != '\t') {
+                // THEN followed by condition without space (e.g., THENX>Y)
+                keyword = "THEN";
+                args = statementText.substring(4).trim();
+            } else {
+                int spaceIndex = statementText.indexOf(' ');
+                keyword = statementText.substring(0, spaceIndex).toUpperCase();
+                args = statementText.substring(spaceIndex + 1).trim();
+            }
+        } else if (statementText.toUpperCase().startsWith("ELSE") && statementText.length() > 4) {
+            char nextChar = statementText.charAt(4);
+            if (nextChar != ' ' && nextChar != '\t') {
+                // ELSE followed by condition without space (e.g., ELSEX>Y)
+                keyword = "ELSE";
+                args = statementText.substring(4).trim();
+            } else {
+                int spaceIndex = statementText.indexOf(' ');
+                keyword = statementText.substring(0, spaceIndex).toUpperCase();
+                args = statementText.substring(spaceIndex + 1).trim();
+            }
+        } else if (statementText.toUpperCase().startsWith("RESTORE") && statementText.length() > 7) {
+            char nextChar = statementText.charAt(7);
+            if (nextChar != ' ' && nextChar != '\t') {
+                // RESTORE followed by variable without space (e.g., RESTOREX)
+                keyword = "RESTORE";
+                args = statementText.substring(7).trim();
+            } else {
+                int spaceIndex = statementText.indexOf(' ');
+                keyword = statementText.substring(0, spaceIndex).toUpperCase();
+                args = statementText.substring(spaceIndex + 1).trim();
+            }
+        } else if (statementText.toUpperCase().startsWith("CLEAR") && statementText.length() > 5) {
+            char nextChar = statementText.charAt(5);
+            if (nextChar != ' ' && nextChar != '\t') {
+                // CLEAR followed by variable without space (e.g., CLEARX)
+                keyword = "CLEAR";
+                args = statementText.substring(5).trim();
+            } else {
+                int spaceIndex = statementText.indexOf(' ');
+                keyword = statementText.substring(0, spaceIndex).toUpperCase();
+                args = statementText.substring(spaceIndex + 1).trim();
+            }
         } else {
             int spaceIndex = statementText.indexOf(' ');
             if (spaceIndex == -1) {
@@ -259,7 +359,7 @@ public class BasicLoader {
             case "STOP" -> new BasicStatement(keyword, "");
             case "GOTO" -> new BasicStatement(keyword, args);
             case "GOSUB" -> new BasicStatement(keyword, args);
-            case "RETURN" -> new BasicStatement(keyword, "");
+            case "RETURN" -> new BasicStatement(keyword, args);
             case "FOR" -> new ForStatement(keyword, args);
             case "NEXT" -> new BasicStatement(keyword, args);
             case "IF" -> parseIfStatement(keyword, args);
@@ -272,6 +372,7 @@ public class BasicLoader {
             case "DATA" -> new DataStatement(keyword, args);
             case "RESTORE" -> new BasicStatement(keyword, args);
             case "CLEAR" -> new BasicStatement(keyword, args);
+            case "ON" -> new BasicStatement(keyword, args);
             default -> {
                 // Check if it's an assignment (no keyword, just variable = expression)
                 if (statementText.contains("=") && !statementText.contains("==") && !statementText.contains("<=") && !statementText.contains(">=")) {
