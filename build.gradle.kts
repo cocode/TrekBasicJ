@@ -28,11 +28,6 @@ tasks.test {
     useJUnitPlatform()
 }
 
-// Ensure clean build by making run task depend on clean
-tasks.named("run") {
-    dependsOn("clean", "classes")
-}
-
 // Configure run task to accept program arguments
 tasks.named<JavaExec>("run") {
     if (project.hasProperty("args")) {
@@ -40,53 +35,13 @@ tasks.named<JavaExec>("run") {
     }
 }
 
-// ---- BASIC interpreter integration test task ----
-val testSuiteDir = file("test_suite")
+// ---- BASIC interpreter integration test task: delegates to Java runner ----
 
-tasks.register("runTestSuite") {
+tasks.register<JavaExec>("runTestSuite") {
     group = "verification"
-    description = "Runs all .bas programs found in test_suite directory with the Java interpreter"
+    description = "Runs all .bas programs in test_suite using TestSuiteRunner"
     dependsOn("classes")
 
-    doLast {
-        if (!testSuiteDir.exists()) {
-            println("No test_suite directory found – skipping.")
-            return@doLast
-        }
-        val failures = mutableListOf<String>()
-        val basFiles = testSuiteDir.walk().filter { it.isFile && it.extension.equals("bas", true) }.sortedBy { it.name }.toList()
-        if (basFiles.isEmpty()) {
-            println("No .bas files found in test_suite.")
-            return@doLast
-        }
-        basFiles.forEach { prog ->
-            println("\n>>> Running ${prog.relativeTo(projectDir)}")
-
-            // Check for "REM EXPECT_EXIT_CODE=N" directive (default 0)
-            var expectedCode = 0
-            prog.useLines { lines ->
-                lines.take(5).forEach { line ->
-                    val m = Regex(".*REM\\s+EXPECT_EXIT_CODE\\s*=\\s*(\\d+)", RegexOption.IGNORE_CASE).find(line)
-                    if (m != null) {
-                        expectedCode = m.groupValues[1].toInt()
-                        return@useLines
-                    }
-                }
-            }
-
-            val result = javaexec {
-                mainClass.set("com.worldware.Main")
-                classpath = sourceSets["main"].runtimeClasspath
-                args = listOf(prog.absolutePath)
-            }
-            if (result.exitValue != expectedCode) {
-                failures.add("${prog.name} (expected $expectedCode got ${result.exitValue})")
-            }
-        }
-        if (failures.isNotEmpty()) {
-            throw GradleException("Interpreter failed on ${'$'}{failures.size} program(s): ${'$'}{failures.joinToString()}")
-        } else {
-            println("\nAll programs executed successfully.")
-        }
-    }
+    mainClass.set("com.worldware.TestSuiteRunner")
+    classpath = sourceSets["main"].runtimeClasspath
 }
