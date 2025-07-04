@@ -89,6 +89,16 @@ public class ExpressionEvaluator {
             }
             // Identifier (letters/digits/$)
             if (Character.isLetter(ch)) {
+                // Generic keyword detection: if the remaining characters start with any keyword,
+                // emit that keyword token and continue scanning from the character *after* it.
+                final String[] TEXT_OPERATORS = {"AND", "OR"};
+                String upperRest = src.substring(idx).toUpperCase();
+                for (String op : TEXT_OPERATORS) {
+                    if (upperRest.startsWith(op)) {
+                        idx += op.length();
+                        return new Token(TokType.IDENT, op);
+                    }
+                }
                 int start = idx;
                 while (idx < src.length()) {
                     char c = src.charAt(idx);
@@ -279,6 +289,10 @@ public class ExpressionEvaluator {
                     }
                     // array access
                     return arrayAccess(name, args);
+                }
+                // Validate variable name syntax (1 letter optionally followed by digit and/or $)
+                if (!name.matches("(?i)[A-Z](\\d)?\\$?")) {
+                    throw new RuntimeException("Invalid variable name: " + name);
                 }
                 // simple variable – must be defined
                 Object val = symbols.get(name);
