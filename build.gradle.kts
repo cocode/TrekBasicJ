@@ -26,6 +26,10 @@ dependencies {
 
 tasks.test {
     useJUnitPlatform()
+    // Print System.out/System.err from tests unconditionally so we can inspect debug output
+    testLogging {
+        showStandardStreams = true
+    }
 }
 
 // Configure run task to accept program arguments
