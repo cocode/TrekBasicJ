@@ -34,6 +34,8 @@ tasks.test {
 
 // Configure run task to accept program arguments
 tasks.named<JavaExec>("run") {
+    // Forward stdin so interactive BASIC programs can read user input instead of immediately seeing EOF
+    standardInput = System.`in`
     if (project.hasProperty("args")) {
         args = (project.property("args") as String).split("\\s+").toList()
     }
