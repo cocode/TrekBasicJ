@@ -78,26 +78,42 @@ public class Main {
      */
     private static Arguments parseArguments(String[] args) {
         if (args.length == 0) {
-            System.err.println("Usage: java Main <program> [--trace] [--symbols] [--time]");
-            System.exit(EXIT_ERROR);
+            printUsageAndExit();
         }
-        
+
         Arguments arguments = new Arguments();
-        arguments.program = args[0];
-        
-        for (int i = 1; i < args.length; i++) {
-            switch (args[i]) {
-                case "--trace", "-t" -> arguments.trace = true;
-                case "--symbols", "-s" -> arguments.symbols = true;
-                case "--time" -> arguments.time = true;
-                default -> {
-                    System.err.println("Unknown argument: " + args[i]);
+
+        for (String arg : args) {
+            if (arg.equals("--trace") || arg.equals("-t")) {
+                arguments.trace = true;
+            } else if (arg.equals("--symbols") || arg.equals("-s")) {
+                arguments.symbols = true;
+            } else if (arg.equals("--time")) {
+                arguments.time = true;
+            } else if (arg.startsWith("-")) {
+                System.err.println("Unknown option: " + arg);
+                System.exit(EXIT_ERROR);
+            } else {
+                // Non-option -> program file name
+                if (arguments.program != null) {
+                    System.err.println("Error: multiple program files specified: '" + arguments.program + "' and '" + arg + "'");
                     System.exit(EXIT_ERROR);
                 }
+                arguments.program = arg;
             }
         }
-        
+
+        if (arguments.program == null) {
+            printUsageAndExit();
+        }
+
         return arguments;
+    }
+
+    private static void printUsageAndExit() {
+        System.err.println("Usage: java Main [options] <program>");
+        System.err.println("Options:\n  --trace,-t     Enable execution trace written to '" + TRACE_FILE_NAME + "'\n  --symbols,-s   Print symbol table at end\n  --time         Show execution time");
+        System.exit(EXIT_ERROR);
     }
 
     /**
