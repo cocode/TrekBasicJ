@@ -7,7 +7,7 @@ import java.util.*;
  * Provides methods for navigation, line lookup, and program modification
  * while hiding the internal list implementation details.
  */
-public class Program {
+public class Program implements java.lang.Iterable<ProgramLine> {
     private final List<ProgramLine> lines;
     private final Map<Integer, Integer> lineToIndex;
 
