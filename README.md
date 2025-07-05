@@ -1,13 +1,33 @@
+# TrekBasicJ
+TrekBasicJ is a BASIC interpreter and compiler. 
+
+They provide an identical language, and share a parser.
+
+## The Interpreter 
+The interpreter can run anywhere you can run Java.
+
 BEFORE STARTING:
 
 export JAVA_HOME=/Users/tomhill/Library/Java/JavaVirtualMachines/corretto-23.0.2/Contents/Home
 
+### Run one program
 
-TO RUN WITH JAVA:  
+java -cp build/classes/java/main com.worldware.Main superstartrek.bas
 
-  java -cp build/classes/java/main com.worldware.Main superstartrek.bas
+### Run the BASIC shell
+java -cp build/classes/java/main com.worldware.BasicShell x.bas
 
-Long form:
+## The Compiler
+The compiler can run anywhere you can have clang (c compiler) generate an executable for. This covers dozens of
+platforms. Every common architecture and a lot of uncommon ones.
+
+% java -Xmx100m -cp build/classes/java/main com.worldware.Tbc x.bas x.exe
+
+
+
+
+
+
 
 /Users/tomhill/Library/Java/JavaVirtualMachines/corretto-23.0.2/Contents/Home/bin/java \
   -cp build/classes/java/main com.worldware.Main \
