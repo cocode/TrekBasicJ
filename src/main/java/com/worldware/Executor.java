@@ -859,4 +859,24 @@ public class Executor {
      * FOR loop record
      */
     public record ForRecord(String variable, Object stop, Object step, ControlLocation location) {}
+
+    public Program getProgram() {
+        return program;
+    }
+
+    public Integer getCurrentIndex() {
+        return location != null ? location.getIndex() : null;
+    }
+
+    public ControlLocation getCurrentLocation() {
+        return location;
+    }
+
+    public Stack<ForRecord> getForStack() {
+        return forStack;
+    }
+
+    public Stack<ControlLocation> getGosubStack() {
+        return gosubStack;
+    }
 } 

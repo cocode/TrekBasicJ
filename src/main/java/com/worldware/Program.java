@@ -113,4 +113,43 @@ public class Program implements java.lang.Iterable<ProgramLine> {
     public ProgramLine get(int index) {
         return lines.get(index);
     }
+
+    /**
+     * Delete a line by its line number. Returns true if removed.
+     */
+    public boolean deleteLine(int lineNumber) {
+        Integer idx = lineToIndex.get(lineNumber);
+        if (idx == null) return false;
+        lines.remove((int) idx);
+        rebuildIndexMap();
+        return true;
+    }
+
+    /**
+     * Insert a new line or replace existing line with same number.
+     * @return true if replaced, false if inserted new line.
+     */
+    public boolean insertOrReplaceLine(ProgramLine newLine) {
+        Integer idx = lineToIndex.get(newLine.getLine());
+        if (idx != null) {
+            lines.set(idx, newLine);
+            return true; // replaced
+        }
+        // insert keeping sorted order by line number
+        int insertPos = 0;
+        while (insertPos < lines.size() && lines.get(insertPos).getLine() < newLine.getLine()) {
+            insertPos++;
+        }
+        lines.add(insertPos, newLine);
+        rebuildIndexMap();
+        return false; // inserted
+    }
+
+    /** Rebuild the line number -> index map after structural changes */
+    private void rebuildIndexMap() {
+        lineToIndex.clear();
+        for (int i = 0; i < lines.size(); i++) {
+            lineToIndex.put(lines.get(i).getLine(), i);
+        }
+    }
 } 

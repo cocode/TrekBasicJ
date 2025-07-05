@@ -3,9 +3,11 @@ package com.worldware;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.FileWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.util.*;
 
 /**
@@ -335,11 +337,22 @@ public class BasicShell {
                     args = line.substring(space + 1).trim();
                 }
 
-                switch (cmd.toLowerCase(Locale.ROOT)) {
+                String cmdRaw = cmd.toLowerCase(Locale.ROOT);
+                // Handle shortest unique prefix matching
+                String resolvedCmd = resolveCommand(cmdRaw);
+                if (resolvedCmd == null) {
+                    System.out.println("Unknown or ambiguous command. Type 'help' for list.");
+                    continue;
+                }
+                cmd = resolvedCmd;
+
+                switch (cmd) {
                     case "quit", "exit" -> {
                         return; // leave loop
                     }
-                    case "help" -> printHelp();
+                    case "help" -> {
+                        if (args == null || args.isBlank()) printHelp(); else printHelp(args);
+                    }
                     case "run", "r" -> runProgramCommand();
                     case "load" -> {
                         if (args == null || args.isBlank()) {
@@ -350,6 +363,17 @@ public class BasicShell {
                         }
                     }
                     case "symbols", "sym" -> cmdSymbols(args);
+                    case "save" -> cmdSave(args);
+                    case "clear" -> cmdClear();
+                    case "format" -> cmdFormat();
+                    case "renum" -> cmdRenum(args);
+                    case "llvm" -> cmdLLVM(args);
+                    case "benchmark" -> cmdBenchmark();
+                    case "stop" -> cmdStop();
+                    case "list" -> cmdList(args);
+                    case "stmts" -> cmdStmts(args);
+                    case "fors", "forstack" -> cmdForStack();
+                    case "gosubs" -> cmdGosubStack();
                     default -> System.out.println("Unknown command. Type 'help' for list.");
                 }
             }
@@ -372,7 +396,244 @@ public class BasicShell {
     }
 
     private void printHelp() {
-        System.out.println("Commands: run | load <file> | symbols [name] | quit | help");
+        System.out.println("Commands: run | load | save | clear | format | renum | list | stmts | fors | gosubs | llvm | benchmark | stop | symbols | quit | help");
+        System.out.println("Type 'help <cmd>' for details.");
+    }
+
+    private static void printUsageSave() { System.out.println("Usage: save <file>"); }
+    private static void printUsageRenum() { System.out.println("Usage: renum [start [increment]] (defaults 100 10)"); }
+
+    // ---------------------------------------------------------------------
+    // Command implementations (phase-1 features)
+    // ---------------------------------------------------------------------
+    private void cmdSave(String args) {
+        if (executor == null) {
+            System.out.println("No program loaded.");
+            return;
+        }
+        if (args == null || args.isBlank()) {
+            printUsageSave();
+            return;
+        }
+        String filename = args.trim();
+        if (!filename.endsWith(".bas")) filename += ".bas";
+        Path p = Paths.get(filename);
+        if (Files.exists(p)) {
+            System.out.println("File exists – will not overwrite: " + filename);
+            return;
+        }
+        try (FileWriter fw = new FileWriter(filename)) {
+            for (ProgramLine pl : executor.getProgram()) {
+                fw.write(pl.getSource());
+                fw.write(System.lineSeparator());
+            }
+            System.out.println("Program saved to " + filename);
+        } catch (IOException e) {
+            System.err.println("Error saving: " + e.getMessage());
+        }
+    }
+
+    private void cmdClear() {
+        executor = null;
+        programFile = null;
+        load_status = false;
+        breakpoints.clear();
+        dataBreakpoints.clear();
+        System.out.println("Program and state cleared.");
+    }
+
+    private void cmdFormat() {
+        if (executor == null) {
+            System.out.println("No program loaded.");
+            return;
+        }
+        Program oldProg = executor.getProgram();
+        Program newProg = format(oldProg);
+        loadProgram(newProg);
+        System.out.println("Program formatted.");
+    }
+
+    private void cmdRenum(String args) {
+        if (executor == null) {
+            System.out.println("No program loaded.");
+            return;
+        }
+        int start = 100;
+        int inc = 10;
+        if (args != null && !args.isBlank()) {
+            String[] parts = args.trim().split(" ");
+            try {
+                if (parts.length >= 1) start = Integer.parseInt(parts[0]);
+                if (parts.length >= 2) inc = Integer.parseInt(parts[1]);
+            } catch (NumberFormatException e) {
+                printUsageRenum();
+                return;
+            }
+        }
+        Program oldProg = executor.getProgram();
+        LineMapResult res = buildLineMap(oldProg, start, inc);
+        Program newProg = renumber(oldProg, res.lineMap, start, inc);
+        loadProgram(newProg);
+        System.out.printf("Renumbered %d statements into %d lines starting at %d inc %d%n",
+                res.statementCount, newProg.size(), start, inc);
+    }
+
+    private void cmdLLVM(String args) {
+        if (executor == null) {
+            System.out.println("No program loaded.");
+            return;
+        }
+        String ir = new com.worldware.llvm.LLVMGenerator(executor.getProgram()).generate();
+        if (args == null || args.isBlank()) {
+            System.out.println(ir);
+        } else {
+            String file = args.trim();
+            try {
+                Files.writeString(Paths.get(file), ir, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+                System.out.println("LLVM IR written to " + file);
+            } catch (IOException e) {
+                System.err.println("Error writing LLVM file: " + e.getMessage());
+            }
+        }
+    }
+
+    private void cmdBenchmark() {
+        if (programFile == null) {
+            System.out.println("No program file specified for benchmark.");
+            return;
+        }
+        long loadStart = System.nanoTime();
+        loadFromFile(false);
+        long loadTime = System.nanoTime() - loadStart;
+        long runStart = System.nanoTime();
+        runProgramCommand();
+        long runTime = System.nanoTime() - runStart;
+        System.out.printf("Load: %.3f sec  Run: %.3f sec%n", loadTime / 1e9, runTime / 1e9);
+    }
+
+    private void cmdStop() {
+        if (programFile == null) {
+            System.out.println("Nothing to restart.");
+            return;
+        }
+        loadFromFile(false);
+        System.out.println("Executor reset – ready to run from start.");
+    }
+
+    private void cmdList(String args) {
+        if (executor == null) {
+            System.out.println("No program loaded.");
+            return;
+        }
+        int count = 10;
+        int startIndex;
+        if (args == null || args.isBlank()) {
+            Integer curIdx = executor.getCurrentIndex();
+            startIndex = curIdx != null ? curIdx : 0;
+        } else {
+            String[] parts = args.trim().split(" ");
+            try {
+                startIndex = executor.getProgram().findLineIndex(Integer.parseInt(parts[0]));
+            } catch (Exception e) {
+                System.out.println("Invalid start line");
+                return;
+            }
+            if (parts.length > 1) {
+                try { count = Integer.parseInt(parts[1]); } catch (NumberFormatException ignore) {}
+            }
+        }
+        List<String> lines = executor.getProgram().getLinesRange(startIndex, count);
+        ControlLocation currentLoc = executor.getCurrentLocation();
+        Integer curIdx = currentLoc != null ? currentLoc.getIndex() : null;
+        for (int i = 0; i < lines.size(); i++) {
+            String prefix = (curIdx != null && curIdx == startIndex + i) ? "*" : " ";
+            System.out.println(prefix + lines.get(i));
+        }
+    }
+
+    private void cmdStmts(String args) {
+        if (executor == null) { System.out.println("No program loaded."); return; }
+        Integer lineFilter = null;
+        if (args != null && !args.isBlank()) {
+            try { lineFilter = Integer.parseInt(args.trim()); } catch (NumberFormatException ignore) {}
+        }
+        for (ProgramLine pl : executor.getProgram()) {
+            if (lineFilter != null && lineFilter != pl.getLine()) continue;
+            System.out.print(pl.getLine() + " ");
+            for (Statement st : pl.getStmts()) {
+                System.out.print("\t" + st + "|");
+            }
+            System.out.println();
+        }
+    }
+
+    private void cmdForStack() {
+        if (executor == null) { System.out.println("No program loaded."); return; }
+        Stack<Executor.ForRecord> fs = executor.getForStack();
+        System.out.println("FOR stack:");
+        if (fs.isEmpty()) {
+            System.out.println("\t<empty>");
+        }
+        for (Executor.ForRecord fr : fs) {
+            System.out.println("\t" + fr);
+        }
+    }
+
+    private void cmdGosubStack() {
+        if (executor == null) { System.out.println("No program loaded."); return; }
+        Stack<ControlLocation> gs = executor.getGosubStack();
+        System.out.println("GOSUB stack:");
+        if (gs.isEmpty()) {
+            System.out.println("\t<empty>");
+        }
+        for (ControlLocation cl : gs) {
+            ProgramLine line = executor.getProgram().getLine(cl.getIndex());
+            System.out.printf("\tLine %d Clause %d%n", line.getLine(), cl.getOffset());
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // Help handling
+    // ---------------------------------------------------------------------
+    private void printHelp(String cmd) {
+        switch (cmd.toLowerCase(Locale.ROOT)) {
+            case "run", "r" -> System.out.println("run : execute current program from beginning");
+            case "load" -> System.out.println("load <file> : load BASIC file");
+            case "save" -> printUsageSave();
+            case "clear" -> System.out.println("clear : remove program and state");
+            case "format" -> System.out.println("format : canonical reformat");
+            case "renum" -> printUsageRenum();
+            case "llvm" -> System.out.println("llvm [file] : print or save LLVM IR");
+            case "benchmark" -> System.out.println("benchmark : time load+run");
+            case "stop" -> System.out.println("stop : reset executor to start");
+            case "symbols", "sym" -> System.out.println("symbols [name] : show symbol(s)");
+            case "list" -> System.out.println("list [start [count]] : list program lines");
+            case "stmts" -> System.out.println("stmts [line] : list statements for a specific line");
+            case "fors", "forstack" -> System.out.println("fors | forstack : show FOR stack");
+            case "gosubs" -> System.out.println("gosubs : show GOSUB stack");
+            default -> System.out.println("Unknown command: " + cmd);
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // Command resolution helper
+    // ---------------------------------------------------------------------
+    private static final List<String> COMMAND_LIST = Arrays.asList(
+            "run", "load", "save", "clear", "format", "renum", "list", "stmts",
+            "fors", "forstack", "gosubs", "llvm", "benchmark", "stop", "symbols",
+            "quit", "exit", "help");
+
+    private String resolveCommand(String prefix) {
+        // exact match first
+        for (String cmd : COMMAND_LIST) {
+            if (cmd.equals(prefix)) return cmd;
+        }
+        List<String> matches = new ArrayList<>();
+        for (String cmd : COMMAND_LIST) {
+            if (cmd.startsWith(prefix)) matches.add(cmd);
+        }
+        if (matches.size() == 1) return matches.get(0);
+        return null; // unknown or ambiguous
     }
 
     // ---------------------------------------------------------------------
