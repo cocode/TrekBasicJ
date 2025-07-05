@@ -26,6 +26,11 @@ public class Executor {
     // User-defined functions management
     private final Map<String, DefStatement> userFunctions;
 
+    // Breakpoint and single-step support
+    private List<int[]> codeBreakpoints = Collections.emptyList();
+    private List<String> watchSymbols = Collections.emptyList();
+    private boolean singleStepMode = false;
+
     public Executor(Program program) throws IOException {
         this(program, false);
     }
@@ -86,6 +91,12 @@ public class Executor {
                 traceFile.println(">" + currentLine.getSource());
             }
 
+            // Breakpoint before executing statement
+            if (hitCodeBreakpoint()) {
+                runStatus = RunStatus.BREAK_CODE;
+                return runStatus;
+            }
+
             Statement stmt = getCurrentStatement();
             
             if (traceFile != null) {
@@ -127,7 +138,42 @@ public class Executor {
                     location = nextLocation;
                 }
             }
+
+            // Single-step support – stop after executing one statement
+            if (singleStepMode) {
+                singleStepMode = false; // consume step
+                runStatus = RunStatus.BREAK_STEP;
+                return runStatus;
+            }
+
+            // Breakpoint support after statement execution
+            if (hitCodeBreakpoint()) {
+                runStatus = RunStatus.BREAK_CODE;
+                return runStatus;
+            }
         }
+    }
+
+    public RunStatus runProgram(List<int[]> breakpoints, List<String> dataBps, boolean singleStep) throws BasicSyntaxError, BasicRuntimeError {
+        this.codeBreakpoints = breakpoints != null ? breakpoints : Collections.emptyList();
+        this.watchSymbols = dataBps != null ? dataBps : Collections.emptyList();
+        this.singleStepMode = singleStep;
+        RunStatus rs = runProgram();
+        // reset
+        this.codeBreakpoints = Collections.emptyList();
+        this.watchSymbols = Collections.emptyList();
+        this.singleStepMode = false;
+        return rs;
+    }
+
+    private boolean hitCodeBreakpoint() {
+        if (codeBreakpoints.isEmpty()) return false;
+        int lineNum = getCurrentLine().getLine();
+        int offset = location.getOffset();
+        for (int[] bp : codeBreakpoints) {
+            if (bp[0] == lineNum && bp[1] == offset) return true;
+        }
+        return false;
     }
 
     /**

@@ -327,6 +327,11 @@ public class BasicShell {
                     continue;
                 }
 
+                // Allow ?expr without space by inserting space
+                if (line.startsWith("?") && line.length()>1 && line.charAt(1)!=' ') {
+                    line = "? " + line.substring(1);
+                }
+
                 String cmd;
                 String args = null;
                 int space = line.indexOf(' ');
@@ -374,6 +379,10 @@ public class BasicShell {
                     case "stmts" -> cmdStmts(args);
                     case "fors", "forstack" -> cmdForStack();
                     case "gosubs" -> cmdGosubStack();
+                    case "break" -> cmdBreak(args);
+                    case "continue", "c" -> cmdContinue(false);
+                    case "next", "n" -> cmdContinue(true);
+                    case "?" -> cmdPrint(args);
                     default -> System.out.println("Unknown command. Type 'help' for list.");
                 }
             }
@@ -592,6 +601,67 @@ public class BasicShell {
         }
     }
 
+    private void cmdBreak(String args) {
+        if (args == null || args.isBlank() || args.equals("list")) {
+            if (breakpoints.isEmpty() && dataBreakpoints.isEmpty()) {
+                System.out.println("<no breakpoints>");
+            } else {
+                System.out.println("Breakpoints:");
+                for (int[] bp : breakpoints) System.out.printf("\tline %d clause %d%n", bp[0], bp[1]);
+                for (String s : dataBreakpoints) System.out.printf("\tdata %s%n", s);
+            }
+            return;
+        }
+        if (args.equals("clear")) {
+            breakpoints.clear(); dataBreakpoints.clear();
+            System.out.println("Breakpoints cleared");
+            return;
+        }
+        String[] parts = args.trim().split(" ");
+        if (Character.isDigit(parts[0].charAt(0))) {
+            int line = Integer.parseInt(parts[0]);
+            int offset = 0;
+            if (parts.length > 1) {
+                try { offset = Integer.parseInt(parts[1]); } catch (NumberFormatException ignore) {}
+            }
+            breakpoints.add(new int[]{line, offset});
+            System.out.printf("Breakpoint set at line %d clause %d%n", line, offset);
+        } else {
+            dataBreakpoints.add(parts[0]);
+            System.out.println("Data breakpoint set on symbol " + parts[0]);
+        }
+    }
+
+    private void cmdContinue(boolean singleStep) {
+        if (executor == null) {
+            System.out.println("No program loaded."); return; }
+        try {
+            RunStatus rs = executor.runProgram(breakpoints, dataBreakpoints, singleStep);
+            switch (rs) {
+                case BREAK_CODE -> System.out.println("Breakpoint hit.");
+                case BREAK_STEP -> System.out.println("Single step done.");
+                default -> System.out.println("Program completed with status " + rs);
+            }
+        } catch (BasicRuntimeError | BasicSyntaxError e) {
+            System.out.println("Error: " + e.getMessage());
+        }
+    }
+
+    private void cmdPrint(String expr) {
+        if (expr == null || expr.isBlank()) {
+            System.out.println("Usage: ? <expression>");
+            return;
+        }
+        try {
+            Map<String,Object> symTab = (executor != null) ? executor.getSymbols() : new HashMap<>();
+            ExpressionEvaluator eval = new ExpressionEvaluator(symTab);
+            Object result = eval.evaluate(expr);
+            System.out.println(result);
+        } catch (Exception e) {
+            System.out.println("Error evaluating: " + e.getMessage());
+        }
+    }
+
     // ---------------------------------------------------------------------
     // Help handling
     // ---------------------------------------------------------------------
@@ -611,6 +681,10 @@ public class BasicShell {
             case "stmts" -> System.out.println("stmts [line] : list statements for a specific line");
             case "fors", "forstack" -> System.out.println("fors | forstack : show FOR stack");
             case "gosubs" -> System.out.println("gosubs : show GOSUB stack");
+            case "break" -> System.out.println("break <line> [clause] | break <symbol> | break list | break clear");
+            case "continue", "c" -> System.out.println("continue : resume after breakpoint");
+            case "next", "n" -> System.out.println("next : single-step one statement");
+            case "?" -> System.out.println("? <expr> : evaluate expression");
             default -> System.out.println("Unknown command: " + cmd);
         }
     }
@@ -619,7 +693,7 @@ public class BasicShell {
     // Command resolution helper
     // ---------------------------------------------------------------------
     private static final List<String> COMMAND_LIST = Arrays.asList(
-            "run", "load", "save", "clear", "format", "renum", "list", "stmts",
+            "?", "run", "load", "save", "clear", "format", "renum", "list", "stmts",
             "fors", "forstack", "gosubs", "llvm", "benchmark", "stop", "symbols",
             "quit", "exit", "help");
 
