@@ -31,7 +31,14 @@ java -cp build/classes/java/main com.worldware.Main superstartrek.bas
 java -cp build/classes/java/main com.worldware.BasicShell x.bas
 
 ## The Compiler
-The compiler can run anywhere you can have clang (c compiler) generate an executable for. This covers dozens of
+TrekBasicJ is not a full compiler - it generates code that can be 
+processed by a compiler backend to produce an executable.
+
+TrekBasicJ generates [intermediate representation](https://en.wikipedia.org/wiki/Intermediate_representation) for [LLVM](https://llvm.org/), and
+this is compiled with [clang](https://clang.llvm.org/), which is availably basically 
+everywhere,
+
+The compiled code can run anywhere you can have clang (c compiler) generate an executable for. This covers dozens of
 platforms. Every common architecture and a lot of uncommon ones.
 
 % java -Xmx100m -cp build/classes/java/main com.worldware.Tbc x.bas x.exe
