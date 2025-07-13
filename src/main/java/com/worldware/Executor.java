@@ -31,11 +31,18 @@ public class Executor {
     private List<String> watchSymbols = Collections.emptyList();
     private boolean singleStepMode = false;
 
+    private final Map<Integer, Set<Integer>> coverage;
+    private boolean coverageEnabled;
+
     public Executor(Program program) throws IOException {
-        this(program, false);
+        this(program, false, false);
     }
 
     public Executor(Program program, boolean trace) throws IOException {
+        this(program, trace, false);
+    }
+
+    public Executor(Program program, boolean trace, boolean coverage) throws IOException {
         this.program = program;
         this.location = new ControlLocation(0, 0);
         this.runStatus = RunStatus.RUN;
@@ -50,6 +57,9 @@ public class Executor {
         this.dataValues = new ArrayList<>();
         this.dataPointer = 0;
         this.userFunctions = new HashMap<>();
+        
+        this.coverage = new HashMap<>();
+        this.coverageEnabled = coverage;
         
         setupProgram();
     }
@@ -89,6 +99,12 @@ public class Executor {
             
             if (traceFile != null && location.getOffset() == 0) {
                 traceFile.println(">" + currentLine.getSource());
+            }
+
+            // Record code coverage
+            if (coverageEnabled) {
+                int ln = currentLine.getLine();
+                coverage.computeIfAbsent(ln, k -> new HashSet<>()).add(location.getOffset());
             }
 
             // Breakpoint before executing statement
@@ -174,6 +190,16 @@ public class Executor {
             if (bp[0] == lineNum && bp[1] == offset) return true;
         }
         return false;
+    }
+
+    private void triggerDataBreakpointIfWatched(String symbolName) {
+        if (watchSymbols.isEmpty()) return;
+        String canon = symbolName.toUpperCase();
+        for (String w : watchSymbols) {
+            if (canon.equalsIgnoreCase(w)) {
+                runStatus = RunStatus.BREAK_DATA;
+            }
+        }
     }
 
     /**
@@ -320,6 +346,7 @@ public class Executor {
             // Simple variable assignment
             String variable = assignment.getVariable().toUpperCase();
             symbols.put(variable, value);
+            triggerDataBreakpointIfWatched(variable);
         }
     }
     
@@ -370,6 +397,7 @@ public class Executor {
             } else {
                 throw new BasicSyntaxError("Invalid array assignment");
             }
+            triggerDataBreakpointIfWatched(arrayName);
         } catch (NumberFormatException e) {
             throw new BasicSyntaxError("Invalid array index");
         }
@@ -701,6 +729,7 @@ public class Executor {
                 }
                 
                 symbols.put(variable, convertedValue);
+                triggerDataBreakpointIfWatched(variable);
             }
             
         } catch (java.io.IOException e) {
@@ -722,6 +751,7 @@ public class Executor {
             
             Object value = dataValues.get(dataPointer++);
             symbols.put(variable, value);
+            triggerDataBreakpointIfWatched(variable);
         }
     }
     
@@ -924,5 +954,13 @@ public class Executor {
 
     public Stack<ControlLocation> getGosubStack() {
         return gosubStack;
+    }
+
+    public Map<Integer, Set<Integer>> getCoverage() {
+        return coverage;
+    }
+
+    public void clearCoverage() {
+        coverage.clear();
     }
 } 
