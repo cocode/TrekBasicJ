@@ -1,7 +1,9 @@
 # <img src="images/logo7.png" alt="Logo" width="50" height="25"> TrekBasicJ
 TrekBasicJ is a BASIC interpreter and compiler. 
 
-is part of the TrekBasic family of BASIC code.
+## TrekBasic Family
+TrekBasicJ is part of the TrekBasic family of BASIC tools.
+
 * TrekBasic - Python version
 * TrekBasicJ - Java Version
 * BasicRS - Rust version
