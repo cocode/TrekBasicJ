@@ -358,7 +358,7 @@ public class BasicShell {
                     case "help" -> {
                         if (args == null || args.isBlank()) printHelp(); else printHelp(args);
                     }
-                    case "run", "r" -> runProgramCommand();
+                    case "run", "r" -> cmdRun(args);
                     case "load" -> {
                         if (args == null || args.isBlank()) {
                             System.out.println("Usage: load <file>");
@@ -383,12 +383,47 @@ public class BasicShell {
                     case "continue", "c" -> cmdContinue(false);
                     case "next", "n" -> cmdContinue(true);
                     case "?" -> cmdPrint(args);
+                    case "coverage" -> cmdCoverage(args);
                     default -> System.out.println("Unknown command. Type 'help' for list.");
                 }
             }
         } catch (Exception e) {
             System.err.println("Error in command loop: " + e.getMessage());
         }
+    }
+
+    private void cmdRun(String args) {
+        if (executor == null) { System.out.println("No program loaded."); return; }
+        boolean coverage = args != null && args.trim().equalsIgnoreCase("coverage");
+        Program prog = executor.getProgram();
+        try {
+            executor = new Executor(prog, coverage);
+        } catch (IOException e) {
+            System.out.println("Error: " + e.getMessage());
+            return;
+        }
+        cmdContinue(false);
+    }
+
+    private void cmdCoverage(String args) {
+        if (executor == null) { System.out.println("No program loaded."); return; }
+        Map<Integer, Set<Integer>> cov = executor.getCoverage();
+        if (cov == null || cov.isEmpty()) {
+            System.out.println("No coverage data recorded.");
+            return;
+        }
+        if (args != null && args.trim().equals("lines")) {
+            for (ProgramLine line : executor.getProgram()) {
+                if (!cov.containsKey(line.getLine())) {
+                    System.out.println(line.getLine() + " not executed");
+                }
+            }
+            return;
+        }
+        // summary
+        int totalLines = executor.getProgram().size();
+        int executedLines = cov.size();
+        System.out.printf("Lines executed: %d/%d (%.1f%%)\n", executedLines, totalLines, 100.0*executedLines/totalLines);
     }
 
     private void runProgramCommand() {
@@ -640,6 +675,11 @@ public class BasicShell {
             switch (rs) {
                 case BREAK_CODE -> System.out.println("Breakpoint hit.");
                 case BREAK_STEP -> System.out.println("Single step done.");
+                case BREAK_DATA -> {
+                    ControlLocation loc = executor.getCurrentLocation();
+                    ProgramLine line = executor.getProgram().getLine(loc.getIndex());
+                    System.out.printf("Data Breakpoint before line %d clause %d%n", line.getLine(), loc.getOffset());
+                }
                 default -> System.out.println("Program completed with status " + rs);
             }
         } catch (BasicRuntimeError | BasicSyntaxError e) {
@@ -685,6 +725,7 @@ public class BasicShell {
             case "continue", "c" -> System.out.println("continue : resume after breakpoint");
             case "next", "n" -> System.out.println("next : single-step one statement");
             case "?" -> System.out.println("? <expr> : evaluate expression");
+            case "coverage" -> System.out.println("coverage [lines] : report coverage after 'run coverage'");
             default -> System.out.println("Unknown command: " + cmd);
         }
     }
@@ -693,7 +734,7 @@ public class BasicShell {
     // Command resolution helper
     // ---------------------------------------------------------------------
     private static final List<String> COMMAND_LIST = Arrays.asList(
-            "?", "run", "load", "save", "clear", "format", "renum", "list", "stmts",
+            "?", "run", "load", "save", "clear", "format", "renum", "list", "stmts", "coverage",
             "fors", "forstack", "gosubs", "llvm", "benchmark", "stop", "symbols",
             "quit", "exit", "help");
 
