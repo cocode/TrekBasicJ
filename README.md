@@ -1,8 +1,19 @@
-# TrekBasicJ
+# <img src="images/logo7.png" alt="Logo" width="50" height="25"> TrekBasicJ
 TrekBasicJ is a BASIC interpreter and compiler. 
 
-They provide an identical language, and share a parser.
+is part of the TrekBasic family of BASIC code.
+* TrekBasic - Python version
+* TrekBasicJ - Java Version
+* BasicRS - Rust version
+* BasicTestSuite - A test suite of BASIC Programs
+* TrekBot - A tool to exercise the superstartrek program
 
+All versions are intended to by byte-by-byte compatible, but are not
+there yet - but they are close. TrekBot and BasicTestSuite are part of
+plan to ensure full compabtiblity.
+
+TrekBasic and TrekBasicJ are also compilers, and the compatibility
+targets are the same for the compiled versions. A compiler for BasicRS is planned.
 ## The Interpreter 
 The interpreter can run anywhere you can run Java.
 
