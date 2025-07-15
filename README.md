@@ -16,9 +16,15 @@ plan to ensure full compatibility.
 ## The Interpreter 
 The interpreter can run anywhere you can run Java.
 
-BEFORE STARTING:
+### Before Starting
 
-export JAVA_HOME=/Users/tomhill/Library/Java/JavaVirtualMachines/corretto-23.0.2/Contents/Home
+Set JAVA_HOME to your JDK. 
+
+For example:
+
+```
+export JAVA_HOME=/Users/homedir/Library/Java/JavaVirtualMachines/corretto-23.0.2/Contents/Home
+```
 
 ### Run one program
 
@@ -57,12 +63,12 @@ TO RUN WITH GRADLE (slower, but builds if necessary)
 
 
 TO COMPILE (not full Support yet)
-% java -Xmx100m -cp build/classes/java/main com.worldware.Tbc x.bas x.exe 
-Written LLVM IR to x.exe.ll
+% java -Xmx100m -cp build/classes/java/main com.worldware.Tbc x.bas x 
+Written LLVM IR to x.ll
 
-clang -o x x.exe.ll
+clang -o x x.ll
 warning: overriding the module target triple with arm64-apple-macosx15.0.0 [-Woverride-module]
 1 warning generated.
-tomhill@Toms-MacBook-Pro TrekBasicJ % ./x
+ % ./x
 3
 
