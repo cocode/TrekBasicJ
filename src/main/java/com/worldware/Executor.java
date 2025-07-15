@@ -677,7 +677,7 @@ public class Executor {
         // Display prompt if present
         if (inputStmt.hasPrompt()) {
             System.out.print(inputStmt.getPrompt());
-            System.out.print(" ");
+            System.out.print("? ");
         } else {
             System.out.print("? "); // Default BASIC prompt
         }
